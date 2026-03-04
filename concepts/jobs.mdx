@@ -13,6 +13,7 @@ name: daily-summary
 description: Summarize today's activity
 schedule: "0 9 * * *"
 agent: hermy
+model: "anthropic/claude-sonnet-4-6"
 hooks:
   prerun: scripts/check.sh
   postrun: scripts/notify.sh
@@ -24,6 +25,22 @@ Post a one-line teaser to #general, then reply in a thread with the full summary
 ```
 
 The markdown body after the frontmatter is the prompt sent to the agent.
+
+## Model Override
+
+Set `model` in the frontmatter to override the agent's configured model for this job. Uses [LiteLLM format](https://docs.litellm.ai/docs/providers) (`provider/model-name`). When omitted, the agent's model chain from `operator.yaml` is used.
+
+This is useful for running cheaper models on simple recurring tasks:
+
+```yaml
+---
+name: link-check
+schedule: "0 */6 * * *"
+model: "anthropic/claude-haiku-4-5"
+---
+
+Check all links in the docs site and report any 404s.
+```
 
 ## Hooks
 
