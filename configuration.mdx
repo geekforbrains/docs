@@ -30,13 +30,13 @@ defaults:
 
 ```yaml
 agents:
-  hermy:
+  operator:
     models:
       - "anthropic/claude-sonnet-4-6"
     transport:
       type: slack
-      bot_token_env: SLACK_BOT_TOKEN_HERMY
-      app_token_env: SLACK_APP_TOKEN_HERMY
+      bot_token_env: SLACK_BOT_TOKEN
+      app_token_env: SLACK_APP_TOKEN
 ```
 
 Each agent can override `models`, `max_iterations`, `context_ratio`, and `max_output_tokens` from defaults. Agents without a `transport` block are available for jobs and sub-agent spawning but have no chat interface.

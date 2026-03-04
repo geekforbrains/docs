@@ -28,7 +28,7 @@ operator init
 This creates:
 - `~/.operator/operator.yaml` — runtime configuration
 - `~/.operator/SYSTEM.md` — system preamble
-- `~/.operator/agents/hermy/AGENT.md` — default agent prompt
+- `~/.operator/agents/operator/AGENT.md` — default agent prompt
 
 ## Configure
 
@@ -42,7 +42,7 @@ defaults:
   env_file: "~/.env"
 
 agents:
-  hermy:
+  operator:
     transport:
       type: slack
       bot_token_env: SLACK_BOT_TOKEN

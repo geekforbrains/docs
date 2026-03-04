@@ -12,7 +12,7 @@ Jobs are scheduled tasks defined as markdown files with YAML frontmatter. Each j
 name: daily-summary
 description: Summarize today's activity
 schedule: "0 9 * * *"
-agent: hermy
+agent: operator
 model: "anthropic/claude-sonnet-4-6"
 hooks:
   prerun: scripts/check.sh
