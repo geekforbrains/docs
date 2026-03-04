@@ -1,0 +1,16 @@
+---
+title: "KV Store CLI"
+description: "Manage the key-value store from the command line"
+---
+
+```sh
+operator kv get <key> [--agent/-a NAME] [--ns/-n NAMESPACE]
+operator kv set <key> <value> [--agent/-a NAME] [--ns/-n NAMESPACE] [--ttl HOURS]
+operator kv delete <key> [--agent/-a NAME] [--ns/-n NAMESPACE]
+operator kv list [--agent/-a NAME] [--ns/-n NAMESPACE] [--prefix/-p PREFIX]
+```
+
+- `kv get` prints the raw value and exits 0, or exits 1 if not found
+- `kv list` outputs JSON
+
+Keys are scoped by agent name and grouped by namespace. See [Built-in Tools](/concepts/tools#key-value-store) for programmatic usage.

@@ -1,0 +1,15 @@
+---
+title: "Service"
+description: "Run Operator as a background service"
+---
+
+Operator can run as a background service using launchd (macOS) or systemd (Linux).
+
+```sh
+operator service install       # generate and load a service definition
+operator service uninstall     # unload and remove the service definition
+operator service start         # start the background service
+operator service stop          # stop the background service
+operator service restart       # restart the background service
+operator service status        # show whether the service is running
+```

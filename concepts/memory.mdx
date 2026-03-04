@@ -1,0 +1,50 @@
+---
+title: "Memory"
+description: "Vector memory with automatic harvesting and semantic search"
+---
+
+Operator includes a vector memory system backed by SQLite and [sqlite-vec](https://github.com/asg017/sqlite-vec). Memories are automatically extracted from conversations, stored as embeddings, and retrieved by semantic similarity.
+
+## How It Works
+
+1. **On each message**, relevant memories are retrieved by cosine similarity and injected as context
+2. **The harvester** periodically extracts facts from conversations and stores them as embeddings
+3. **The cleaner** periodically deduplicates, merges, and normalizes stored memories
+
+## Scopes
+
+Memories are scoped to control visibility:
+
+| Scope | Description |
+|-------|-------------|
+| `user` | Personal facts about a specific user |
+| `agent` | Context specific to an agent |
+| `global` | Shared knowledge across all agents |
+
+## Pinned Memories
+
+Memories can be **pinned** — pinned memories are always injected into the system prompt regardless of similarity score. Use pinning for critical context that should always be available.
+
+## Configuration
+
+See the [memory configuration](/configuration#memory) section for all options including embedding model, harvester schedule, and similarity thresholds.
+
+## Tools
+
+Agents have built-in tools for memory management:
+
+| Tool | Description |
+|------|-------------|
+| `save_memory` | Store a new memory |
+| `search_memories` | Semantic search across memories |
+| `forget_memory` | Delete a specific memory |
+| `list_memories` | List memories with optional filters |
+
+## CLI
+
+```sh
+operator memories [--scope/-s SCOPE] [--scope-id/-i ID] [--pinned] [--limit/-n N]
+operator memories stats
+```
+
+See [Memories CLI](/cli/memories) for details.

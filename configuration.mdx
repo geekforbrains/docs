@@ -1,0 +1,97 @@
+---
+title: "Configuration"
+description: "Complete reference for operator.yaml"
+---
+
+Runtime config lives at `~/.operator/operator.yaml`.
+
+## Defaults
+
+```yaml
+defaults:
+  models:
+    - "anthropic/claude-opus-4-6"
+    - "openai/gpt-5.3-codex"
+  max_iterations: 25
+  context_ratio: 0.5
+  max_output_tokens: null
+  env_file: "~/.env"
+```
+
+| Field | Description |
+|-------|-------------|
+| `models` | Fallback chain — if the first model errors, the next is tried. Always use list format. |
+| `max_iterations` | Maximum tool-call loops per agent run. |
+| `context_ratio` | Fraction of context window to use for conversation history. |
+| `max_output_tokens` | Cap output length per LLM call. `null` uses each model's max. |
+| `env_file` | Path to env file for API keys. Supports `~` expansion. |
+
+## Agents
+
+```yaml
+agents:
+  hermy:
+    models:
+      - "anthropic/claude-sonnet-4-6"
+    transport:
+      type: slack
+      bot_token_env: SLACK_BOT_TOKEN_HERMY
+      app_token_env: SLACK_APP_TOKEN_HERMY
+```
+
+Each agent can override `models` and `max_output_tokens` from defaults. Agents without a `transport` block are available for jobs and sub-agent spawning but have no chat interface.
+
+See [Agents](/concepts/agents) for details on agent prompts and workspaces.
+
+## Memory
+
+```yaml
+memory:
+  embed_model: "openai/text-embedding-3-small"
+  embed_dimensions: 1536
+  max_memories: 10000
+  inject_top_k: 5
+  inject_min_relevance: 0.1
+  harvester:
+    enabled: true
+    schedule: "*/30 * * * *"
+    model: "openai/gpt-4.1-mini"
+  cleaner:
+    enabled: true
+    schedule: "0 3 * * *"
+    model: "anthropic/claude-haiku-4-5"
+```
+
+| Field | Description |
+|-------|-------------|
+| `embed_model` | Required when any memory service is enabled. |
+| `embed_dimensions` | Embedding vector size. |
+| `max_memories` | Per-scope soft cap. |
+| `inject_top_k` | Memories injected per message. |
+| `inject_min_relevance` | Cosine similarity threshold. |
+
+### Harvester
+
+Extracts facts from conversations using an LLM and stores them as vector embeddings in SQLite (via sqlite-vec). When enabled, `schedule` and `model` are required.
+
+### Cleaner
+
+Deduplicates, merges, and tidies stored memories by sending them through an LLM. When enabled, `schedule` and `model` are required.
+
+See [Memory](/concepts/memory) for more on scopes, pinning, and retrieval.
+
+## Environment Variables
+
+API keys are resolved from the environment, loaded via `env_file`:
+
+```sh
+# LLM providers
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+
+# Slack (per agent)
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_APP_TOKEN=xapp-...
+```
+
+All model names use [LiteLLM format](https://docs.litellm.ai/docs/providers) (`provider/model-name`).

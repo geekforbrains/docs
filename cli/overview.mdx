@@ -1,0 +1,39 @@
+---
+title: "CLI Overview"
+description: "The operator command-line interface"
+---
+
+The `operator` command doubles as the runtime server and a CLI for inspecting and managing state. Subcommands run standalone (no running service required).
+
+## Usage
+
+```sh
+operator                   # start the runtime
+operator <subcommand>      # run a CLI command
+```
+
+## Agent Resolution
+
+CLI commands that need an agent name resolve it in order:
+
+1. `--agent` flag
+2. `OPERATOR_AGENT` environment variable
+3. Default agent from config
+
+In job hook scripts, `OPERATOR_AGENT` is set automatically.
+
+## Inspection Commands
+
+```sh
+operator config            # print resolved configuration as JSON
+operator agents            # list configured agents with transport and model info
+operator skills            # list discovered skills with env status
+```
+
+## Log Viewing
+
+```sh
+operator logs [-f/--follow] [-n/--lines N]
+```
+
+Tails `~/.operator/logs/operator.log`. Defaults to the last 50 lines.

@@ -1,0 +1,60 @@
+---
+title: "Agents"
+description: "Define agent personalities and capabilities with markdown files"
+---
+
+Each agent is defined by a markdown file at `~/.operator/agents/<name>/AGENT.md`. The file content becomes the agent's prompt — its personality, instructions, and capabilities.
+
+## Creating an Agent
+
+Create a directory and prompt file:
+
+```sh
+mkdir -p ~/.operator/agents/myagent
+```
+
+Write `~/.operator/agents/myagent/AGENT.md`:
+
+```markdown
+You are a helpful assistant focused on code review.
+Always explain your reasoning before suggesting changes.
+Be concise but thorough.
+```
+
+Then register it in `operator.yaml`:
+
+```yaml
+agents:
+  myagent:
+    models:
+      - "anthropic/claude-sonnet-4-6"
+    transport:
+      type: slack
+      bot_token_env: SLACK_BOT_TOKEN
+      app_token_env: SLACK_APP_TOKEN
+```
+
+## Workspace
+
+Each agent has a workspace at `~/.operator/agents/<name>/workspace/`. This is the working directory for all tool calls — shell commands, file reads/writes, and `list_files` all resolve relative paths against it. Files persist across conversations and job runs.
+
+## System Prompt Assembly
+
+The full system prompt is assembled from multiple sources, ordered from most stable (cache-friendly) to least:
+
+1. **`SYSTEM.md`** — system preamble (auto-created at `~/.operator/SYSTEM.md`)
+2. **`AGENT.md`** — agent prompt body (verbatim)
+3. **Context block** — platform, channel, user, workspace info (or job block for jobs)
+4. **Pinned memories** — always injected regardless of similarity (chat only)
+5. **Available skills** — discovered from `skills/*/SKILL.md`
+6. **Transport extras** — e.g. Slack channel list, messaging instructions
+
+## Model Fallback
+
+Agents inherit `models` from `defaults` unless overridden. The model list is a fallback chain — if the first model errors (overloaded, rate limited, down), the next is tried automatically.
+
+## Headless Agents
+
+Agents without a `transport` block have no chat interface but are available for:
+- Running [jobs](/concepts/jobs)
+- Being spawned as sub-agents via the `spawn_agent` tool

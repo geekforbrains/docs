@@ -1,0 +1,27 @@
+---
+title: "Skills"
+description: "Extend agents with discoverable skill modules"
+---
+
+Skills are reusable capability modules that agents can invoke. Each skill is defined by a `SKILL.md` file at `~/.operator/skills/<name>/SKILL.md`.
+
+## Structure
+
+```text
+~/.operator/skills/
+└── my-skill/
+    ├── SKILL.md              # skill definition (frontmatter + prompt)
+    ├── scripts/              # executable scripts
+    ├── references/           # reference documents
+    └── assets/               # supporting files
+```
+
+Skills are automatically discovered and their descriptions are injected into the system prompt so agents know what's available.
+
+## Listing Skills
+
+```sh
+operator skills
+```
+
+Lists all discovered skills with their environment status.

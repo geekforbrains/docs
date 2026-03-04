@@ -1,0 +1,61 @@
+---
+title: "Jobs"
+description: "Schedule recurring tasks with cron expressions"
+---
+
+Jobs are scheduled tasks defined as markdown files with YAML frontmatter. Each job lives at `~/.operator/jobs/<name>/JOB.md`.
+
+## Job Format
+
+```yaml
+---
+name: daily-summary
+description: Summarize today's activity
+schedule: "0 9 * * *"
+agent: hermy
+hooks:
+  prerun: scripts/check.sh
+  postrun: scripts/notify.sh
+enabled: true
+---
+
+Summarize the key events from the last 24 hours.
+Post a one-line teaser to #general, then reply in a thread with the full summary.
+```
+
+The markdown body after the frontmatter is the prompt sent to the agent.
+
+## Hooks
+
+| Hook | Description |
+|------|-------------|
+| `prerun` | Gate script — non-zero exit skips LLM execution. |
+| `postrun` | Receives model output on stdin. |
+
+Hook scripts receive these environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `JOB_NAME` | Name of the job being executed |
+| `OPERATOR_AGENT` | Agent running the job |
+| `OPERATOR_HOME` | Path to `~/.operator` |
+| `OPERATOR_DB` | Path to the SQLite database |
+
+## Posting Results
+
+The agent uses `send_message` to post results to Slack channels. The prompt body should include posting instructions (which channels, whether to thread, etc.). If there's nothing to post, simply don't call `send_message`.
+
+## Job Counters
+
+Each job tracks four counters in SQLite:
+
+| Counter | Incremented when |
+|---------|-----------------|
+| `run_count` | LLM actually executed (success or error) |
+| `error_count` | LLM ran but threw an exception |
+| `gate_count` | `prerun` hook returned non-zero (job skipped) |
+| `skip_count` | Cron fired but the previous run was still in progress |
+
+## Managing Jobs
+
+Use the [CLI](/cli/jobs) to list, inspect, enable/disable, and manually trigger jobs.

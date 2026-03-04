@@ -1,0 +1,61 @@
+---
+title: "Built-in Tools"
+description: "Tools available to all agents"
+---
+
+Every agent has access to these built-in tools:
+
+## Workspace & Files
+
+| Tool | Description |
+|------|-------------|
+| `run_shell` | Execute shell commands in the agent's workspace |
+| `read_file` | Read file contents |
+| `write_file` | Write or overwrite a file |
+| `list_files` | List files in a directory |
+
+All file paths resolve relative to the agent's workspace at `~/.operator/agents/<name>/workspace/`.
+
+## Web
+
+| Tool | Description |
+|------|-------------|
+| `web_fetch` | Fetch and extract content from a URL |
+
+## Messaging
+
+| Tool | Description |
+|------|-------------|
+| `send_message` | Send a message to a channel or thread |
+
+## Sub-agents
+
+| Tool | Description |
+|------|-------------|
+| `spawn_agent` | Spawn another agent as a sub-agent |
+
+## Memory
+
+| Tool | Description |
+|------|-------------|
+| `save_memory` | Store a memory with scope and optional pin |
+| `search_memories` | Semantic search across stored memories |
+| `forget_memory` | Delete a specific memory |
+| `list_memories` | List memories with filters |
+
+## Key-Value Store
+
+| Tool | Description |
+|------|-------------|
+| `kv_get` | Retrieve a value by key |
+| `kv_set` | Store a value with optional TTL |
+| `kv_delete` | Remove a key |
+| `kv_list` | List keys and values |
+
+Keys are scoped by agent name and grouped by namespace. Use namespaces to organize related keys (e.g. by job name). Use TTL to auto-expire tracking data.
+
+## Job Management
+
+| Tool | Description |
+|------|-------------|
+| `manage_job` | Enable, disable, or trigger jobs |
