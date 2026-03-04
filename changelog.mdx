@@ -1,0 +1,45 @@
+---
+title: "Changelog"
+description: "Release history for Operator"
+---
+
+## 0.2.2
+
+### Fixed
+
+- **Prompt caching** — system prompt is split into a stable prefix and dynamic suffix with Anthropic cache breakpoints so the prefix is reused across turns
+- Rolling cache breakpoint on conversation history (penultimate user message) for multi-turn token savings
+- Read OpenAI `cached_tokens` from `prompt_tokens_details` for unified cache reporting
+
+### Added
+
+- Per-run ID logging via ContextVar for tracing agent runs in logs
+- Usage line now shows cache write tokens, prefixed with `Usage:`
+
+## 0.2.1
+
+### Added
+
+- Per-job model override via `model` field in [JOB.md frontmatter](/concepts/jobs#model-override)
+
+## 0.2.0
+
+### Added
+
+- [`operator init`](/cli/overview#setup) command to scaffold `~/.operator/` with starter config and agent
+
+## 0.1.0
+
+### Added
+
+- Initial public beta release
+- LiteLLM-backed agent with model fallback chains
+- Slack transport with Socket Mode and thread continuity
+- SQLite persistence with WAL mode
+- Scheduled jobs with cron, prerun gating, and postrun hooks
+- Vector memory with harvesting and semantic search
+- Key-value store with TTL support
+- 16 built-in tools (shell, file, web, memory, KV, jobs, messaging, sub-agents)
+- Skills discovery from markdown files
+- Turn-safe context truncation
+- CLI for inspection, service management, and job control

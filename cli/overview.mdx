@@ -22,6 +22,14 @@ CLI commands that need an agent name resolve it in order:
 
 In job hook scripts, `OPERATOR_AGENT` is set automatically.
 
+## Setup
+
+```sh
+operator init              # scaffold ~/.operator/ with starter config and agent
+```
+
+Creates the directory structure, `operator.yaml`, `SYSTEM.md`, and a default `AGENT.md`. Safe to run multiple times — existing files are not overwritten.
+
 ## Inspection Commands
 
 ```sh

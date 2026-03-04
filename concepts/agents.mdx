@@ -40,14 +40,19 @@ Each agent has a workspace at `~/.operator/agents/<name>/workspace/`. This is th
 
 ## System Prompt Assembly
 
-The full system prompt is assembled from multiple sources, ordered from most stable (cache-friendly) to least:
+The full system prompt is assembled from multiple sources, split into a stable prefix and dynamic suffix separated by a cache boundary:
 
+**Stable prefix** (cached across turns):
 1. **`SYSTEM.md`** — system preamble (auto-created at `~/.operator/SYSTEM.md`)
 2. **`AGENT.md`** — agent prompt body (verbatim)
-3. **Context block** — platform, channel, user, workspace info (or job block for jobs)
-4. **Pinned memories** — always injected regardless of similarity (chat only)
-5. **Available skills** — discovered from `skills/*/SKILL.md`
+3. **Available skills** — discovered from `skills/*/SKILL.md`
+
+**Dynamic suffix** (changes per conversation/turn):
+4. **Context block** — platform, channel, user, workspace info (or job block for jobs)
+5. **Pinned memories** — always injected regardless of similarity (chat only)
 6. **Transport extras** — e.g. Slack channel list, messaging instructions
+
+The stable prefix is reused across turns via Anthropic prompt-cache breakpoints, reducing token costs for multi-turn conversations.
 
 ## Model Fallback
 

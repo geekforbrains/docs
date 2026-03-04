@@ -73,6 +73,15 @@ Where `root_ts` is `thread_ts` for threaded replies or `ts` for top-level posts.
 
 ## Commands
 
-Messages starting with `!` bypass the LLM:
+Messages starting with `!` bypass the LLM and are handled directly:
 
-- `!stop` — cancels the active request in the current conversation
+| Command | Description |
+|---------|-------------|
+| `!help` | List all available commands |
+| `!stop` | Cancel the active request in the current conversation |
+| `!restart` | Directs to CLI (disabled in chat) |
+| `!config` | Show resolved configuration as JSON |
+| `!agents` | List configured agents |
+| `!jobs [name]` | List all jobs, or show details for a specific job |
+| `!skills` | List discovered skills with env status |
+| `!memories` | List pinned memories (agent and global scopes) |

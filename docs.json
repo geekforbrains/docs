@@ -22,7 +22,8 @@
             "pages": [
               "index",
               "quickstart",
-              "configuration"
+              "configuration",
+              "changelog"
             ]
           },
           {

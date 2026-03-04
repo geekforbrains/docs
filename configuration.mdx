@@ -39,7 +39,7 @@ agents:
       app_token_env: SLACK_APP_TOKEN_HERMY
 ```
 
-Each agent can override `models` and `max_output_tokens` from defaults. Agents without a `transport` block are available for jobs and sub-agent spawning but have no chat interface.
+Each agent can override `models`, `max_iterations`, `context_ratio`, and `max_output_tokens` from defaults. Agents without a `transport` block are available for jobs and sub-agent spawning but have no chat interface.
 
 See [Agents](/concepts/agents) for details on agent prompts and workspaces.
 
@@ -95,3 +95,14 @@ SLACK_APP_TOKEN=xapp-...
 ```
 
 All model names use [LiteLLM format](https://docs.litellm.ai/docs/providers) (`provider/model-name`).
+
+## Settings
+
+```yaml
+settings:
+  show_usage: true
+```
+
+| Field | Description |
+|-------|-------------|
+| `show_usage` | Append token usage stats as a reply after each agent response. Defaults to `false`. |
