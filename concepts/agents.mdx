@@ -38,6 +38,8 @@ agents:
 
 Each agent has a workspace at `~/.operator/agents/<name>/workspace/`. This is the working directory for all tool calls — shell commands, file reads/writes, and `list_files` all resolve relative paths against it. Files persist across conversations and job runs.
 
+A `shared/` symlink is automatically created inside each workspace pointing to `~/.operator/shared/`. Use this directory for files that need to be accessible to all agents.
+
 ## System Prompt Assembly
 
 The full system prompt is assembled from multiple sources, split into a stable prefix and dynamic suffix separated by a cache boundary:

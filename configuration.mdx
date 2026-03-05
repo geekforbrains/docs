@@ -15,6 +15,7 @@ defaults:
   max_iterations: 25
   context_ratio: 0.5
   max_output_tokens: null
+  timezone: "America/Vancouver"
   env_file: "~/.env"
 ```
 
@@ -24,6 +25,7 @@ defaults:
 | `max_iterations` | Maximum tool-call loops per agent run. |
 | `context_ratio` | Fraction of context window to use for conversation history. |
 | `max_output_tokens` | Cap output length per LLM call. `null` uses each model's max. |
+| `timezone` | IANA timezone for system prompt timestamps and job scheduling. Defaults to `UTC`. |
 | `env_file` | Path to env file for API keys. Supports `~` expansion. |
 
 ## Agents
@@ -40,6 +42,22 @@ agents:
 ```
 
 Each agent can override `models`, `max_iterations`, `context_ratio`, and `max_output_tokens` from defaults. Agents without a `transport` block are available for jobs and sub-agent spawning but have no chat interface.
+
+### Permissions
+
+Restrict which tools or skills an agent can use:
+
+```yaml
+agents:
+  restricted-agent:
+    permissions:
+      tools:
+        deny: ["run_shell", "write_file"]
+      skills:
+        allow: ["summarize", "translate"]
+```
+
+`allow` and `deny` are mutually exclusive within each section. When `allow` is set, only listed items are available. When `deny` is set, everything except listed items is available.
 
 See [Agents](/concepts/agents) for details on agent prompts and workspaces.
 

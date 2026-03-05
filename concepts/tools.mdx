@@ -62,8 +62,12 @@ Keys are scoped by agent name and grouped by namespace. Use namespaces to organi
 
 ## Transport Tools
 
-These tools are available when the agent is connected to a transport:
+Each transport injects its own tools — only the tools for the active transport are available. For example, an agent connected to Slack gets Slack-specific tools, while a future Discord agent would get Discord-specific tools.
+
+### Slack
 
 | Tool | Description |
 |------|-------------|
-| `list_channels` | List available Slack channels with IDs and topics |
+| `list_channels` | List available channels with IDs and topics |
+| `read_channel` | Read recent messages from a channel |
+| `read_thread` | Read messages from a specific thread |

@@ -3,6 +3,19 @@ title: "Changelog"
 description: "Release history for Operator"
 ---
 
+## 0.3.0
+
+### Added
+
+- **Transport-scoped tools** — transports now inject their own tools into the agent. Slack adds `read_channel` and `read_thread` so agents can actively look up channel history and thread context beyond the current conversation.
+- **Shared directory** — `~/.operator/shared/` is symlinked into every agent workspace for cross-agent file sharing
+- **Agent permissions** — `allow`/`deny` lists for tools and skills per agent
+- **Timezone config** — `defaults.timezone` sets the IANA timezone for timestamps and job scheduling (defaults to UTC)
+
+### Changed
+
+- Transport tools section in docs now reflects per-transport tool injection rather than a hardcoded list
+
 ## 0.2.2
 
 ### Fixed
@@ -39,7 +52,7 @@ description: "Release history for Operator"
 - Scheduled jobs with cron, prerun gating, and postrun hooks
 - Vector memory with harvesting and semantic search
 - Key-value store with TTL support
-- 16 built-in tools (shell, file, web, memory, KV, jobs, messaging, sub-agents)
+- Built-in tools (shell, file, web, memory, KV, jobs, messaging, sub-agents) plus transport-specific tools
 - Skills discovery from markdown files
 - Turn-safe context truncation
 - CLI for inspection, service management, and job control

@@ -61,6 +61,18 @@ agents:
       app_token_env: SLACK_APP_TOKEN
 ```
 
+## Transport Tools
+
+When an agent uses the Slack transport, these tools are automatically available:
+
+| Tool | Description |
+|------|-------------|
+| `list_channels` | List channels the bot can see, with IDs and topics |
+| `read_channel` | Fetch recent messages from any channel (up to 100) |
+| `read_thread` | Fetch messages from a specific thread by timestamp |
+
+These tools let the agent actively look up context beyond the current thread — for example, checking what was discussed in a channel before responding, or reading a thread that was referenced in conversation.
+
 ## Conversation Routing
 
 Slack conversations use canonical IDs:

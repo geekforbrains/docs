@@ -45,10 +45,11 @@ It is intentionally small and file-driven:
 ├── logs/
 ├── state/
 │   └── operator.db         # SQLite database
+├── shared/                     # files shared across all agents
 ├── agents/
 │   └── <agent>/
 │       ├── AGENT.md        # agent prompt
-│       └── workspace/      # agent working directory
+│       └── workspace/      # agent working directory (shared/ symlinked in)
 ├── jobs/
 │   └── <job>/
 │       ├── JOB.md          # job definition
