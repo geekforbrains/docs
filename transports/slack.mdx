@@ -21,6 +21,8 @@ Under **OAuth & Permissions**, add these bot token scopes:
 - `channels:history`
 - `channels:read`
 - `chat:write`
+- `files:read`
+- `files:write`
 - `groups:history`
 - `groups:read`
 - `im:history`
@@ -60,6 +62,18 @@ agents:
       bot_token_env: SLACK_BOT_TOKEN
       app_token_env: SLACK_APP_TOKEN
 ```
+
+## File Support
+
+Users can upload files directly in Slack messages. Operator handles them based on type:
+
+- **Images** (PNG, JPEG, GIF, WebP up to 5 MB) are inlined as base64 and sent directly to the model as vision input.
+- **All other files** (PDFs, documents, audio, etc.) are saved to `workspace/uploads/` where the agent can access them with `read_file` or `run_shell`.
+- Files larger than 50 MB are skipped.
+
+The agent can send files back using the `send_file` tool, which uploads a file from the workspace to the current thread.
+
+<Note>The `files:read` and `files:write` bot token scopes are required for file support. See the setup section above.</Note>
 
 ## Transport Tools
 

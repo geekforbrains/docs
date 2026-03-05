@@ -27,6 +27,9 @@ All file paths resolve relative to the agent's workspace at `~/.operator/agents/
 | Tool | Description |
 |------|-------------|
 | `send_message` | Send a message to a channel or thread |
+| `send_file` | Upload a file from the workspace to a channel or thread |
+
+Both tools default to the current conversation's channel and thread when called without explicit `channel` or `thread_id` parameters. Pass them explicitly to cross-post to a different channel.
 
 ## Sub-agents
 
