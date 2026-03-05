@@ -3,13 +3,25 @@ title: "Changelog"
 description: "Release history for Operator"
 ---
 
-## 0.3.1
+## 0.4.0
 
 ### Added
 
+- **Users, roles, and auth** — every inbound message is authenticated against a user database with role-based agent access control
+- **Agent permissions** — flat allow-lists for [tools and skills](/concepts/agents#permissions) per agent
+- **Skill access tools** — [`read_skill` and `run_skill`](/concepts/tools#skill-access) let restricted agents use skills without shell access
+- **Agent sandbox** — [`sandbox`](/concepts/agents#sandbox) config flag confines file tools to the workspace (default) or grants full filesystem access
 - **File support** — users can upload images, PDFs, and documents in Slack; images are sent to the model as vision input, other files are saved to `workspace/uploads/`
-- **`send_file` tool** — agents can upload workspace files back to chat
-- **Messaging defaults** — `send_message` and `send_file` now default to the current conversation's channel and thread
+- **`send_file` tool** — agents can upload files back to chat
+- **`operator job run`** — run jobs from the CLI with dedicated transport and logging
+- **`manage_users` tool** — admin-only runtime user management
+
+### Fixed
+
+- `send_message` and `send_file` default to the current conversation's channel and thread
+- Hook scripts respect shebang interpreter
+- Skill script paths expanded correctly for `run_skill`
+- `manage_skill list` respects agent skill permissions
 
 ## 0.3.0
 
