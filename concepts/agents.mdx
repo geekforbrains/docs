@@ -3,7 +3,7 @@ title: "Agents"
 description: "Define agent personalities and capabilities with markdown files"
 ---
 
-Each agent is defined by a markdown file at `~/.operator/agents/<name>/AGENT.md`. The file content becomes the agent's prompt — its personality, instructions, and capabilities.
+Each agent is defined by a markdown file at `~/.operator/agents/<name>/AGENT.md`. The file supports optional YAML frontmatter for metadata and a markdown body that becomes the agent's prompt.
 
 ## Creating an Agent
 
@@ -16,10 +16,28 @@ mkdir -p ~/.operator/agents/myagent
 Write `~/.operator/agents/myagent/AGENT.md`:
 
 ```markdown
+---
+name: myagent
+description: Code review specialist that explains reasoning clearly.
+---
+
 You are a helpful assistant focused on code review.
 Always explain your reasoning before suggesting changes.
 Be concise but thorough.
 ```
+
+### Frontmatter
+
+The YAML frontmatter between `---` delimiters is optional but enables inter-agent awareness:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | No | Agent name. Defaults to the directory name if omitted. |
+| `description` | No | Short description of the agent's role. Agents without a description are hidden from other agents. |
+
+When agents have frontmatter with a `description`, the runtime injects an "Available Agents" block into each agent's system prompt listing the other agents. This lets agents discover each other and delegate tasks via `spawn_agent`.
+
+The frontmatter is stripped before the prompt body is injected — the LLM only sees the markdown content below the closing `---`.
 
 Then register it in `operator.yaml`:
 
@@ -46,13 +64,14 @@ The full system prompt is assembled from multiple sources, split into a stable p
 
 **Stable prefix** (cached across turns):
 1. **`SYSTEM.md`** — system preamble (auto-created at `~/.operator/SYSTEM.md`)
-2. **`AGENT.md`** — agent prompt body (verbatim)
+2. **`AGENT.md`** — agent prompt body (frontmatter stripped)
 3. **Available skills** — discovered from `skills/*/SKILL.md`
+4. **Available agents** — discovered from `agents/*/AGENT.md` frontmatter (other agents only)
 
 **Dynamic suffix** (changes per conversation/turn):
-4. **Context block** — platform, channel, user, workspace info (or job block for jobs)
-5. **Pinned memories** — always injected regardless of similarity (chat only)
-6. **Transport extras** — e.g. Slack channel list, messaging instructions
+5. **Context block** — platform, channel, user, workspace info (or job block for jobs)
+6. **Pinned memories** — always injected regardless of similarity (chat only)
+7. **Transport extras** — e.g. Slack channel list, messaging instructions
 
 The stable prefix is reused across turns via Anthropic prompt-cache breakpoints, reducing token costs for multi-turn conversations.
 
@@ -76,7 +95,7 @@ agents:
 - **`sandbox: true`** (default) — file tools reject paths outside the workspace.
 - **`sandbox: false`** — file tools accept absolute paths and paths outside the workspace. Relative paths still resolve from the workspace.
 - `run_shell` is not affected by sandbox — it always runs from the workspace as cwd but has no path restrictions. To restrict shell access for public-facing agents, remove `run_shell` from their `permissions.tools`.
-- Sub-agents inherit their parent's sandbox setting.
+- Sub-agents inherit their parent's sandbox setting unless spawned as a different agent (via `spawn_agent(agent="...")`), in which case the target agent's sandbox setting is used.
 
 <Note>The `shared/` symlink inside each workspace points outside the workspace directory. Sandboxed agents can access shared files via `run_shell` but not through file tools directly. Unsandboxed agents have no such restriction.</Note>
 
@@ -98,7 +117,7 @@ agents:
 - **`"*"`** — explicit full access (equivalent to omitting the block).
 - **`[list]`** — only the listed names are available; everything else is hidden.
 - Unlisted tools and skills are removed from the LLM's view entirely.
-- Sub-agents inherit their parent's tool filter.
+- Sub-agents inherit their parent's tool filter unless spawned as a different agent, in which case the target agent's permissions apply.
 - Run `operator tools` to see all available tool names.
 
 <Tip>Sandbox and permissions are orthogonal. Permissions control **which** tools are visible. Sandbox controls **where** file tools can reach. Use both together for public-facing agents.</Tip>
@@ -111,8 +130,22 @@ See [Configuration](/configuration#permissions) for the full syntax reference.
 
 Agents inherit `models` from `defaults` unless overridden. The model list is a fallback chain — if the first model errors (overloaded, rate limited, down), the next is tried automatically.
 
+## Cross-Agent Spawning
+
+The `spawn_agent` tool accepts an optional `agent` parameter to delegate a task to a different agent:
+
+```
+spawn_agent(task="Review this PR for security issues", agent="researcher")
+```
+
+When `agent` is specified, the sub-agent runs with the target agent's full config — its own system prompt, models, workspace, sandbox setting, and permissions. When omitted, the sub-agent inherits the calling agent's context.
+
+Sub-agents are capped at 3 levels of nesting. Each spawn is logged with the parent agent, target agent, and depth for traceability.
+
+<Tip>Add `description` frontmatter to your agents so they can discover each other. Without it, agents won't appear in each other's "Available Agents" list and the LLM won't know they exist.</Tip>
+
 ## Headless Agents
 
 Agents without a `transport` block have no chat interface but are available for:
 - Running [jobs](/concepts/jobs)
-- Being spawned as sub-agents via the `spawn_agent` tool
+- Being spawned as sub-agents via `spawn_agent`

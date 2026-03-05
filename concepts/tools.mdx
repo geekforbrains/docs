@@ -35,7 +35,21 @@ Both tools default to the current conversation's channel and thread when called 
 
 | Tool | Description |
 |------|-------------|
-| `spawn_agent` | Spawn another agent as a sub-agent |
+| `spawn_agent` | Spawn a sub-agent to handle a focused sub-task |
+
+### `spawn_agent`
+
+Spawns a sub-agent that gets its own conversation and runs to completion. Returns the sub-agent's final response.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `task` | Yes | Clear description of what the sub-agent should accomplish. |
+| `context` | No | Additional context or data for the sub-agent. |
+| `agent` | No | Name of a different agent to spawn. Uses that agent's prompt, models, workspace, sandbox, and permissions. If omitted, inherits the calling agent's context. |
+
+Sub-agents are capped at 3 levels of nesting. When `agent` is specified, agents need [frontmatter](/concepts/agents#frontmatter) with a `description` to appear in each other's "Available Agents" list.
+
+See [Cross-Agent Spawning](/concepts/agents#cross-agent-spawning) for details.
 
 ## Memory
 

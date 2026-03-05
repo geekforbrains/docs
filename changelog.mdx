@@ -3,6 +3,20 @@ title: "Changelog"
 description: "Release history for Operator"
 ---
 
+## 0.5.0
+
+### Added
+
+- **Agent frontmatter** — `AGENT.md` files now support optional YAML frontmatter with `name` and `description`. Agents with descriptions are automatically listed in each other's system prompts for inter-agent awareness.
+- **Cross-agent spawning** — `spawn_agent` accepts an optional `agent` parameter to delegate tasks to a different agent with its own prompt, models, workspace, sandbox, and permissions.
+- **Spawn logging** — every `spawn_agent` call is logged with the parent agent, target agent, and nesting depth for traceability.
+
+### Changed
+
+- `AGENT.md` frontmatter is stripped before prompt injection — the LLM only sees the markdown body.
+- `operator agents` CLI now shows a Description column from agent frontmatter.
+- Sub-agent sandbox and permissions inheritance now respects the target agent's config when spawning a different agent.
+
 ## 0.4.1
 
 ### Added

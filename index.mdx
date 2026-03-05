@@ -27,7 +27,8 @@ It is intentionally small and file-driven:
 
 ## Core Features
 
-- Multiple agents with separate prompts and workspaces
+- Multiple agents with frontmatter metadata and separate workspaces
+- Cross-agent delegation via `spawn_agent(agent="...")`
 - Model fallback chains (if one model errors, the next is tried)
 - Slack transport with thread continuity
 - Skills discovery from markdown files

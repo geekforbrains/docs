@@ -57,7 +57,7 @@ agents:
 
 `run_shell` is not affected — use `permissions.tools` to restrict shell access.
 
-Sub-agents inherit their parent's sandbox setting.
+Sub-agents inherit their parent's sandbox setting unless spawned as a different agent (via `spawn_agent(agent="...")`), in which case the target agent's sandbox setting is used.
 
 See [Agents — Sandbox](/concepts/agents#sandbox) for usage guidance.
 
