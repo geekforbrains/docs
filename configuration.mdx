@@ -43,6 +43,24 @@ agents:
 
 Each agent can override `models`, `max_iterations`, `context_ratio`, and `max_output_tokens` from defaults. Agents without a `transport` block are available for jobs and sub-agent spawning but have no chat interface.
 
+### Sandbox
+
+```yaml
+agents:
+  operator:
+    sandbox: false
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `sandbox` | `true` | When `true`, file tools (`read_file`, `write_file`, `list_files`, `send_file`) are confined to the agent's workspace. When `false`, file tools accept absolute paths and paths outside the workspace. |
+
+`run_shell` is not affected — use `permissions.tools` to restrict shell access.
+
+Sub-agents inherit their parent's sandbox setting.
+
+See [Agents — Sandbox](/concepts/agents#sandbox) for usage guidance.
+
 ### Permissions
 
 Restrict which tools or skills an agent can use:

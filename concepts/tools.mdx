@@ -14,7 +14,7 @@ Every agent has access to these built-in tools:
 | `write_file` | Write or overwrite a file |
 | `list_files` | List files in a directory |
 
-All file paths resolve relative to the agent's workspace at `~/.operator/agents/<name>/workspace/`.
+All file paths resolve relative to the agent's workspace at `~/.operator/agents/<name>/workspace/`. By default, paths that escape the workspace are rejected. Set `sandbox: false` on the agent to allow full filesystem access — see [Sandbox](/concepts/agents#sandbox).
 
 ## Web
 
