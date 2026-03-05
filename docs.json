@@ -44,6 +44,7 @@
               "cli/overview",
               "cli/service",
               "cli/jobs",
+              "cli/skills",
               "cli/kv",
               "cli/memories"
             ]

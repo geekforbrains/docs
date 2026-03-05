@@ -1,0 +1,45 @@
+---
+title: "Skills"
+description: "List and manage skills from the CLI"
+---
+
+## List Skills
+
+```sh
+operator skills              # list all discovered skills
+operator skills list         # same as above
+```
+
+Shows each skill's name, description, and environment variable status (`ok`, `missing: VAR_NAME`, or `-` if none required).
+
+## Reset Bundled Skills
+
+Operator ships with bundled skills that are installed on `operator init`. If you edit or delete a bundled skill and want to restore the original:
+
+```sh
+operator skills reset <name>    # reset a specific bundled skill
+operator skills reset --all     # reset all bundled skills
+```
+
+Running `reset` without arguments shows the available bundled skills:
+
+```sh
+operator skills reset
+# Available bundled skills:
+#
+#   skill-creator
+#
+# Usage: operator skills reset <name> or --all
+```
+
+<Warning>
+  Reset **replaces** the skill directory entirely. Any local edits to the skill will be lost.
+</Warning>
+
+## Bundled Skills
+
+| Skill | Description |
+|-------|-------------|
+| `skill-creator` | Teaches agents how to create and manage skills following the agentskills.io spec. |
+
+Bundled skills are automatically installed to `~/.operator/skills/` on first run if the directory doesn't already exist. On upgrades, new bundled skills are added without touching existing ones.

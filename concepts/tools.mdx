@@ -58,7 +58,15 @@ Keys are scoped by agent name and grouped by namespace. Use namespaces to organi
 
 | Tool | Description |
 |------|-------------|
-| `manage_job` | Enable, disable, or trigger jobs |
+| `manage_job` | Create, update, delete, enable, disable, and list jobs |
+
+## Skill Management
+
+| Tool | Description |
+|------|-------------|
+| `manage_skill` | Create, update, delete, and list skills |
+
+Actions: `list`, `create`, `update`, `delete`. The `config` parameter takes the full `SKILL.md` content (frontmatter + body). Validates the [agentskills.io](https://agentskills.io) spec on create and update — name format, description length, metadata structure, and non-empty body.
 
 ## Transport Tools
 

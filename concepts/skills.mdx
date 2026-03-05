@@ -1,27 +1,176 @@
 ---
 title: "Skills"
-description: "Extend agents with discoverable skill modules"
+description: "Extend agents with reusable capability modules"
 ---
 
-Skills are reusable capability modules that agents can invoke. Each skill is defined by a `SKILL.md` file at `~/.operator/skills/<name>/SKILL.md`.
+Skills are reusable instruction documents that teach agents new capabilities. They follow the [agentskills.io](https://agentskills.io) open spec — a portable format supported by Claude Code, Cursor, Gemini CLI, and other agent products.
 
-## Structure
+Each skill lives at `~/.operator/skills/<name>/` and contains a `SKILL.md` file with YAML frontmatter and markdown instructions.
+
+## How Skills Work
+
+Skills use **progressive disclosure** to manage context efficiently:
+
+1. **Discovery** — At startup, only the `name` and `description` from each skill are loaded into the system prompt.
+2. **Activation** — When a task matches a skill's description, the agent reads the full `SKILL.md` body.
+3. **Resources** — Files in `scripts/`, `references/`, and `assets/` are loaded only when explicitly referenced.
+
+This keeps the system prompt lean while giving agents access to deep knowledge on demand.
+
+## Directory Structure
 
 ```text
 ~/.operator/skills/
 └── my-skill/
-    ├── SKILL.md              # skill definition (frontmatter + prompt)
-    ├── scripts/              # executable scripts
-    ├── references/           # reference documents
-    └── assets/               # supporting files
+    ├── SKILL.md           # Required: metadata + instructions
+    ├── scripts/           # Optional: executable code
+    ├── references/        # Optional: detailed docs loaded on demand
+    └── assets/            # Optional: templates, data files
 ```
 
-Skills are automatically discovered and their descriptions are injected into the system prompt so agents know what's available.
+## SKILL.md Format
 
-## Listing Skills
+Every skill requires a `SKILL.md` file with YAML frontmatter and a markdown body.
 
-```sh
-operator skills
+### Frontmatter
+
+```yaml
+---
+name: pr-reviewer
+description: >-
+  Reviews GitHub pull requests by analyzing diffs, checking for common
+  issues, and posting structured review comments. Use when asked to review
+  a PR, check code quality, or provide feedback on changes.
+metadata:
+  env:
+    - GITHUB_TOKEN
+---
 ```
 
-Lists all discovered skills with their environment status.
+#### Required Fields
+
+| Field | Constraints |
+|-------|-------------|
+| `name` | 1–64 characters. Lowercase letters, numbers, and hyphens only. No leading, trailing, or consecutive hyphens. Must match the parent directory name. |
+| `description` | 1–1024 characters. Describes what the skill does **and** when to use it. Write in third person. |
+
+#### Optional Fields
+
+| Field | Description |
+|-------|-------------|
+| `license` | License name or reference to a bundled license file. |
+| `compatibility` | Environment requirements (max 500 chars). E.g. "Requires git, docker, and internet access". |
+| `metadata` | Arbitrary key-value mapping. `metadata.env` is an Operator convention — a list of environment variable names the skill requires. |
+| `allowed-tools` | Space-delimited list of pre-approved tools (experimental). |
+
+### Body
+
+The markdown body after frontmatter contains the skill instructions. Write whatever helps the agent perform the task — step-by-step instructions, examples, edge cases, references to bundled files.
+
+```markdown
+# PR Reviewer
+
+## Steps
+
+1. Fetch the PR diff using `gh pr diff <number>`
+2. Analyze for security issues, logic errors, style consistency, missing tests
+3. Post a structured review using `gh pr review <number>`
+
+## Review Format
+
+### Summary
+One paragraph overview of the changes.
+
+### Issues
+Bulleted list, severity-tagged: `[critical]`, `[suggestion]`, `[nit]`.
+
+### Verdict
+APPROVE, REQUEST_CHANGES, or COMMENT with a one-line rationale.
+```
+
+Keep the body under **500 lines**. For longer content, split into `references/` files and link from `SKILL.md`:
+
+```markdown
+For the full API schema, see [references/schema.md](references/schema.md).
+```
+
+Keep file references **one level deep** from SKILL.md — avoid chains of files referencing other files.
+
+## Environment Variables
+
+Skills that need API keys or secrets should **never** hardcode them. Instead:
+
+1. List required env vars in `metadata.env`:
+   ```yaml
+   metadata:
+     env:
+       - GITHUB_TOKEN
+       - SLACK_WEBHOOK_URL
+   ```
+
+2. Reference them by name in instructions:
+   ```markdown
+   Authenticate using `$GITHUB_TOKEN` in shell commands.
+   ```
+
+3. Users add values to their `.env` file (configured via `defaults.env_file` in `operator.yaml`).
+
+Operator validates `metadata.env` at startup and warns about any missing variables.
+
+## Bundled Skills
+
+Operator ships with bundled skills that are installed automatically on `operator init` and on first startup. Currently bundled:
+
+- **skill-creator** — Teaches agents how to create, update, and manage skills. This is the bootstrap skill that enables agents to extend their own capabilities.
+
+Bundled skills are copied into `~/.operator/skills/` and are fully editable. If you modify a bundled skill and want to restore the original, use the [skills CLI](/cli/skills).
+
+## Creating Skills
+
+Agents can create skills using the `manage_skill` tool:
+
+```
+manage_skill(action="create", name="my-skill", config="<full SKILL.md content>")
+```
+
+The bundled `skill-creator` skill teaches agents how to write effective skills. Ask your agent to "create a skill for X" and it will follow the spec automatically.
+
+You can also create skills manually by adding a directory to `~/.operator/skills/` with a `SKILL.md` file.
+
+## Permissions
+
+Skills can be filtered per-agent using `permissions.skills` in `operator.yaml`:
+
+```yaml
+agents:
+  operator:
+    permissions:
+      skills:
+        allow:
+          - pr-reviewer
+          - deploy-staging
+```
+
+Or deny specific skills:
+
+```yaml
+agents:
+  limited:
+    permissions:
+      skills:
+        deny:
+          - deploy-staging
+```
+
+`allow` and `deny` are mutually exclusive.
+
+## Managing Skills
+
+<CardGroup cols={2}>
+  <Card title="Skills CLI" icon="terminal" href="/cli/skills">
+    List, reset, and manage skills from the command line.
+  </Card>
+  <Card title="Built-in Tools" icon="wrench" href="/concepts/tools">
+    See the manage_skill tool reference.
+  </Card>
+</CardGroup>

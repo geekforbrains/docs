@@ -28,14 +28,13 @@ In job hook scripts, `OPERATOR_AGENT` is set automatically.
 operator init              # scaffold ~/.operator/ with starter config and agent
 ```
 
-Creates the directory structure, `operator.yaml`, `SYSTEM.md`, and a default `AGENT.md`. Safe to run multiple times — existing files are not overwritten.
+Creates the directory structure, `operator.yaml`, `SYSTEM.md`, a default `AGENT.md`, and installs bundled skills. Safe to run multiple times — existing files and skills are not overwritten.
 
 ## Inspection Commands
 
 ```sh
 operator config            # print resolved configuration as JSON
 operator agents            # list configured agents with transport and model info
-operator skills            # list discovered skills with env status
 ```
 
 ## Log Viewing
