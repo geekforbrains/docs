@@ -1,0 +1,80 @@
+---
+title: "Users & Auth"
+description: "Identity, roles, and access control for transport messages"
+---
+
+Every inbound message is authenticated. There is no toggle — auth is always on.
+
+## Identity
+
+Users are identified by a stable `username` (lowercase alphanumeric, dots, hyphens, 1–64 chars). Multiple transport identities can map to a single username, so the same person on Slack and Telegram resolves to one user.
+
+Platform IDs follow the format `transport:platform_id`:
+
+```
+slack:U04ABC123
+telegram:12345678
+```
+
+Display names are not stored. They are resolved at runtime from transport APIs.
+
+## Roles
+
+The `admin` role is built-in and hardcoded. It grants access to all agents and admin-only tools like `manage_users`. Defining `admin` in the config `roles` block is a validation error.
+
+Custom roles are defined in `operator.yaml` and map to agent access:
+
+```yaml
+roles:
+  team:
+    agents: [operator, researcher]
+  viewer:
+    agents: [researcher]
+```
+
+A user can have multiple roles — allowed agents are the union of all role agent lists. If a user holds a role that isn't defined in config, that role grants no agent access (a warning is logged at startup).
+
+## Auth Flow
+
+On every inbound message:
+
+1. Resolve `platform_id` to `username`
+2. Resolve `username` to `roles`
+3. Resolve `roles` to allowed agents
+4. If the user is unknown or not allowed for the target agent, reject
+
+Rejection behavior is controlled by `settings.reject_response`:
+
+| Value | Behavior |
+|-------|----------|
+| `"ignore"` | Silently drop the message (default) |
+| `"announce"` | Reply with a rejection message |
+
+If no users exist in the database, all messages are rejected. A log warning suggests running `operator user add`.
+
+Auth applies to transport messages only — [jobs](/concepts/jobs) bypass auth entirely.
+
+## Memory Scoping
+
+User memories are keyed by `username`, not platform ID. This means memories persist across transports — talk on Slack, memories available on Telegram.
+
+## Managing Users
+
+**CLI:**
+
+```sh
+operator user add gavin --role admin slack U04ABC123
+operator user remove gavin
+operator user link gavin telegram 12345678
+operator user unlink gavin slack U04ABC123
+operator user add-role gavin team
+operator user remove-role gavin team
+operator user list
+operator user info gavin
+```
+
+**Chat:** Use the `manage_users` tool (admin-only).
+
+## Role-Gated Tools
+
+Some tools require a specific role to execute. Currently `manage_users` requires `admin`. The tool stays visible to the LLM but execution is blocked for unauthorized users.

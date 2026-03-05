@@ -37,6 +37,24 @@ operator config            # print resolved configuration as JSON
 operator agents            # list configured agents with transport and model info
 ```
 
+## User Management
+
+```sh
+operator user add <username> --role <role> <transport> <external_id>    # add a user with identity
+operator user list                                                       # list all users
+operator user remove <name>                                              # remove a user
+```
+
+See the [User CLI](/cli/users) for full details.
+
+## Tool Listing
+
+```sh
+operator tools                 # list all built-in tools
+```
+
+Useful for configuring agent [permissions](/concepts/agents#permissions) — shows the exact tool names to use in the permissions block.
+
 ## Log Viewing
 
 ```sh

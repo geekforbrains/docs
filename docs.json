@@ -26,6 +26,7 @@
             "group": "Core Concepts",
             "pages": [
               "concepts/agents",
+              "concepts/users",
               "concepts/jobs",
               "concepts/skills",
               "concepts/memory",
@@ -42,6 +43,7 @@
             "group": "CLI Reference",
             "pages": [
               "cli/overview",
+              "cli/users",
               "cli/service",
               "cli/jobs",
               "cli/skills",

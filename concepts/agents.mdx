@@ -64,18 +64,18 @@ Agents can be restricted to specific tools and skills using an opt-in permission
 agents:
   researcher:
     permissions:
-      tools:
-        allow: [read_file, list_files, web_fetch, search_memories]
-      skills:
-        deny: [deploy]
+      tools: [read_file, list_files, web_fetch, read_skill, run_skill, search_memories]
+      skills: [summarize, translate]
 ```
 
 - **No `permissions` block** — full access to all tools and skills (default).
-- `allow` and `deny` are mutually exclusive per category.
-- `allow` — only listed names are available; everything else is hidden.
-- `deny` — everything is available except listed names.
-- Denied tools and skills are removed from the LLM's view entirely.
+- **`"*"`** — explicit full access (equivalent to omitting the block).
+- **`[list]`** — only the listed names are available; everything else is hidden.
+- Unlisted tools and skills are removed from the LLM's view entirely.
 - Sub-agents inherit their parent's tool filter.
+- Run `operator tools` to see all available tool names.
+
+User roles also control which agents a user can access — see [Users](/concepts/users) for details.
 
 See [Configuration](/configuration#permissions) for the full syntax reference.
 

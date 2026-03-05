@@ -51,19 +51,39 @@ Restrict which tools or skills an agent can use:
 agents:
   restricted-agent:
     permissions:
-      tools:
-        deny: ["run_shell", "write_file"]
-      skills:
-        allow: ["summarize", "translate"]
+      tools: [read_file, list_files, web_fetch, read_skill, run_skill, search_memories]
+      skills: [summarize, translate]
 ```
 
-`allow` and `deny` are mutually exclusive within each section. When `allow` is set, only listed items are available. When `deny` is set, everything except listed items is available.
+- No `permissions` block = full access (default).
+- `"*"` = explicit full access.
+- `[list]` = only these names are available; everything else is hidden.
+- Permissions use flat allow-lists.
+
+<Tip>Run `operator tools` to see all available built-in tool names.</Tip>
 
 See [Agents](/concepts/agents) for details on agent prompts and workspaces.
 
 ### Shared Directory
 
 All agents share a `~/.operator/shared/` directory, symlinked into each workspace as `workspace/shared/`. Use this for files that need to be accessible across agents — shared data, output handoffs, etc. The directory is created by `operator init` and the symlink is set up automatically on each agent run.
+
+## Roles
+
+```yaml
+roles:
+  team:
+    agents: [operator, researcher]
+  viewer:
+    agents: [researcher]
+```
+
+Roles control which agents a user can message. Manage users via the CLI (`operator user`) or the `manage_users` tool. See the [Users](/concepts/users) guide.
+
+- `admin` is a built-in role that grants access to **all** agents. It cannot be redefined in config.
+- A user's allowed agents are the **union** of all their role agent lists.
+
+See [Users](/concepts/users) for full details on user management and role assignment.
 
 ## Memory
 
@@ -122,9 +142,11 @@ All model names use [LiteLLM format](https://docs.litellm.ai/docs/providers) (`p
 
 ```yaml
 settings:
-  show_usage: true
+  show_usage: false
+  reject_response: ignore   # "announce" or "ignore"
 ```
 
 | Field | Description |
 |-------|-------------|
 | `show_usage` | Append token usage stats as a reply after each agent response. Defaults to `false`. |
+| `reject_response` | What happens when an unauthorized user messages an agent. `announce` replies with "You don't have access to this agent." `ignore` silently drops the message. Defaults to `ignore`. |

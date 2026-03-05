@@ -68,6 +68,59 @@ Keys are scoped by agent name and grouped by namespace. Use namespaces to organi
 
 Actions: `list`, `create`, `update`, `delete`. The `config` parameter takes the full `SKILL.md` content (frontmatter + body). Validates the [agentskills.io](https://agentskills.io) spec on create and update — name format, description length, metadata structure, and non-empty body.
 
+## Skill Access
+
+These tools let agents interact with skills without needing `run_shell` — useful for restricted agents that still need skill capabilities.
+
+| Tool | Description |
+|------|-------------|
+| `read_skill` | Read skill content (SKILL.md, references, assets) |
+| `run_skill` | Execute a command in the context of a skill |
+
+### `read_skill`
+
+Reads files from a skill's directory. Used for progressive disclosure — the agent reads `SKILL.md` first, then reads specific reference or asset files as needed.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `skill` | Yes | Skill name |
+| `path` | No | Relative path within the skill directory. Defaults to `SKILL.md`. |
+
+Path traversal is blocked — `..` components are rejected. Only skills in the agent's permission list are accessible.
+
+### `run_skill`
+
+Executes a command in the context of a skill. Runs with `shell=False` (no pipes, redirects, or chaining). Skill script paths are auto-expanded.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `skill` | Yes | Skill name |
+| `command` | Yes | Command string (parsed with `shlex`) |
+| `timeout` | No | Timeout in seconds (default 120) |
+
+- `SKILL_DIR` env var is set to the skill's absolute path.
+- Arguments starting with `scripts/`, `references/`, or `assets/` are auto-prefixed with the skill path.
+- Transport tokens and `OPERATOR_*` env vars are stripped from the subprocess environment.
+- Output is capped at 16 KB.
+
+## User Management
+
+| Tool | Description |
+|------|-------------|
+| `manage_users` | Manage users, identities, and roles (admin-only) |
+
+### `manage_users`
+
+Manage users, identities, and roles. Requires the `admin` role — execution is blocked for non-admin users even if the tool is visible.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `action` | Yes | One of: `list`, `add`, `remove`, `link`, `unlink`, `add_role`, `remove_role` |
+| `username` | No | Target username |
+| `role` | No | Role to add or remove |
+| `transport` | No | Transport name (for link/unlink) |
+| `external_id` | No | External identity (for link/unlink) |
+
 ## Transport Tools
 
 Each transport injects its own tools — only the tools for the active transport are available. For example, an agent connected to Slack gets Slack-specific tools, while a future Discord agent would get Discord-specific tools.

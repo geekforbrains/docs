@@ -1,0 +1,33 @@
+---
+title: "Users"
+description: "Manage users, identities, and roles"
+---
+
+```sh
+operator user add <username> --role <role> <transport> <external_id>
+operator user remove <username>
+operator user link <username> <transport> <external_id>
+operator user unlink <username> <transport> <external_id>
+operator user list
+operator user info <username>
+operator user add-role <username> <role>
+operator user remove-role <username> <role>
+```
+
+## Bootstrap example
+
+Typical first-time setup flow:
+
+```sh
+operator user add gavin --role admin slack U04ABC123
+operator user link gavin telegram 12345678
+operator user add shawn --role team slack U07XYZ789
+operator user list
+```
+
+## Notes
+
+- `--role` is required on `add` — it creates the user, assigns the role, and links the identity in one command.
+- If the role is not `admin` and is not defined in config, a warning is shown but the user is still created.
+- Usernames must be lowercase alphanumeric (dots and hyphens allowed), 1–64 characters.
+- `remove` cascades — all identities and roles are deleted with the user.

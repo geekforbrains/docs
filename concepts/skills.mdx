@@ -145,24 +145,12 @@ Skills can be filtered per-agent using `permissions.skills` in `operator.yaml`:
 agents:
   operator:
     permissions:
-      skills:
-        allow:
-          - pr-reviewer
-          - deploy-staging
+      skills: [pr-reviewer, deploy-staging]
 ```
 
-Or deny specific skills:
+When set, only the listed skills are available to that agent. Omit `skills` entirely to grant access to all skills.
 
-```yaml
-agents:
-  limited:
-    permissions:
-      skills:
-        deny:
-          - deploy-staging
-```
-
-`allow` and `deny` are mutually exclusive.
+Agents without `run_shell` access can still use skills via the `read_skill` and `run_skill` tools — see [Built-in Tools](/concepts/tools#skill-access) for details.
 
 ## Managing Skills
 
