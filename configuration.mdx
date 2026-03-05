@@ -61,6 +61,10 @@ agents:
 
 See [Agents](/concepts/agents) for details on agent prompts and workspaces.
 
+### Shared Directory
+
+All agents share a `~/.operator/shared/` directory, symlinked into each workspace as `workspace/shared/`. Use this for files that need to be accessible across agents — shared data, output handoffs, etc. The directory is created by `operator init` and the symlink is set up automatically on each agent run.
+
 ## Memory
 
 ```yaml

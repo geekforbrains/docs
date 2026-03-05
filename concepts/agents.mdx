@@ -56,6 +56,29 @@ The full system prompt is assembled from multiple sources, split into a stable p
 
 The stable prefix is reused across turns via Anthropic prompt-cache breakpoints, reducing token costs for multi-turn conversations.
 
+## Permissions
+
+Agents can be restricted to specific tools and skills using an opt-in permissions block in `operator.yaml`:
+
+```yaml
+agents:
+  researcher:
+    permissions:
+      tools:
+        allow: [read_file, list_files, web_fetch, search_memories]
+      skills:
+        deny: [deploy]
+```
+
+- **No `permissions` block** — full access to all tools and skills (default).
+- `allow` and `deny` are mutually exclusive per category.
+- `allow` — only listed names are available; everything else is hidden.
+- `deny` — everything is available except listed names.
+- Denied tools and skills are removed from the LLM's view entirely.
+- Sub-agents inherit their parent's tool filter.
+
+See [Configuration](/configuration#permissions) for the full syntax reference.
+
 ## Model Fallback
 
 Agents inherit `models` from `defaults` unless overridden. The model list is a fallback chain — if the first model errors (overloaded, rate limited, down), the next is tried automatically.

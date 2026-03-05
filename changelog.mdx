@@ -7,14 +7,17 @@ description: "Release history for Operator"
 
 ### Added
 
-- **Transport-scoped tools** — transports now inject their own tools into the agent. Slack adds `read_channel` and `read_thread` so agents can actively look up channel history and thread context beyond the current conversation.
-- **Shared directory** — `~/.operator/shared/` is symlinked into every agent workspace for cross-agent file sharing
 - **Agent permissions** — `allow`/`deny` lists for tools and skills per agent
+- **Shared directory** — `~/.operator/shared/` is symlinked into every agent workspace for cross-agent file sharing
+- **Bundled skills** — skills shipped with the package, auto-installed on `operator init`
+- **`manage_skill` tool** — agents can create, update, and delete skills at runtime
+- **`operator skills reset`** — CLI command to restore bundled skills to their original version
+- **Transport-scoped read tools** — Slack transport adds `list_channels`, `read_channel`, and `read_thread`
 - **Timezone config** — `defaults.timezone` sets the IANA timezone for timestamps and job scheduling (defaults to UTC)
 
-### Changed
+### Fixed
 
-- Transport tools section in docs now reflects per-transport tool injection rather than a hardcoded list
+- Default agent renamed from `hermy`/`default` to `operator`
 
 ## 0.2.2
 
