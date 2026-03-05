@@ -96,6 +96,18 @@ For the full API schema, see [references/schema.md](references/schema.md).
 
 Keep file references **one level deep** from SKILL.md — avoid chains of files referencing other files.
 
+## Path References
+
+When referencing files under the Operator base directory in skill instructions or scripts, always use `$OPERATOR_HOME` instead of `~/.operator`. Tilde expansion is a shell feature and breaks in non-shell contexts (e.g. `node ~/...` treats `~` as a literal directory name). `$OPERATOR_HOME` is set by the runtime and expands correctly everywhere.
+
+```markdown
+# Good
+node $OPERATOR_HOME/skills/my-skill/scripts/run.js
+
+# Bad — tilde may not expand
+node ~/.operator/skills/my-skill/scripts/run.js
+```
+
 ## Environment Variables
 
 Skills that need API keys or secrets should **never** hardcode them. Instead:
@@ -122,6 +134,7 @@ Operator validates `metadata.env` at startup and warns about any missing variabl
 Operator ships with bundled skills that are installed automatically on `operator init` and on first startup. Currently bundled:
 
 - **skill-creator** — Teaches agents how to create, update, and manage skills. This is the bootstrap skill that enables agents to extend their own capabilities.
+- **job-creator** — Teaches agents how to create, update, and manage scheduled jobs using `manage_job`. Covers JOB.md anatomy, cron schedules, prompt writing, stateful KV patterns, hooks, and the critical `send_message` delivery rule.
 
 Bundled skills are copied into `~/.operator/skills/` and are fully editable. If you modify a bundled skill and want to restore the original, use the [skills CLI](/cli/skills).
 

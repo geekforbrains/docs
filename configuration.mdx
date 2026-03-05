@@ -156,6 +156,17 @@ SLACK_APP_TOKEN=xapp-...
 
 All model names use [LiteLLM format](https://docs.litellm.ai/docs/providers) (`provider/model-name`).
 
+### Runtime Variables
+
+Operator sets these environment variables automatically. They are available in `run_shell` commands, skill scripts, and job hooks:
+
+| Variable | Description |
+|----------|-------------|
+| `OPERATOR_HOME` | Resolved absolute path to the Operator base directory (typically `~/.operator`). Use this instead of `~/.operator` in scripts and skill instructions — tilde expansion is unreliable outside shell contexts. |
+| `OPERATOR_AGENT` | Name of the agent running the current job (set in job hooks). |
+| `OPERATOR_DB` | Path to the SQLite database (set in job hooks). |
+| `JOB_NAME` | Name of the current job (set in job hooks). |
+
 ## Settings
 
 ```yaml

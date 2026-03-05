@@ -3,6 +3,19 @@ title: "Changelog"
 description: "Release history for Operator"
 ---
 
+## 0.4.1
+
+### Added
+
+- **`OPERATOR_HOME` env var** — the resolved Operator base directory is now exposed as `$OPERATOR_HOME` in all shell commands, skill scripts, and job hooks. Use it instead of `~/.operator` for reliable path resolution in non-shell contexts.
+- **`job-creator` bundled skill** — teaches agents how to create and manage scheduled jobs using `manage_job`, covering JOB.md anatomy, cron schedules, prompt patterns, KV state, hooks, and the `send_message` delivery rule.
+- **Prompts extracted to files** — system, agent, job, and subagent prompts moved from inline strings to `.md` files under `prompts/`, loaded via `load_prompt()`.
+
+### Changed
+
+- System prompt trimmed and reworded for clarity
+- `$OPERATOR_HOME` path documented in agent context and job context prompts
+
 ## 0.4.0
 
 ### Added
