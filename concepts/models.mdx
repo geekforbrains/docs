@@ -50,16 +50,16 @@ Supported values:
 - `medium`
 - `high`
 
-Operator maps these to LiteLLM `reasoning_effort` when the current model supports it:
+Operator maps these to LiteLLM reasoning controls when the current model supports them:
 
 | Operator | LiteLLM |
 | --- | --- |
-| `off` | `reasoning_effort="none"` |
+| `off` | no reasoning request; usually `reasoning_effort="none"`, but omitted for Anthropic compatibility |
 | `low` | `reasoning_effort="low"` |
 | `medium` | `reasoning_effort="medium"` |
 | `high` | `reasoning_effort="high"` |
 
-If the current model does not support `reasoning_effort`, Operator omits the parameter and continues.
+If the current model does not support reasoning controls, Operator omits the parameter and continues.
 
 ## Cross-Provider Safety
 

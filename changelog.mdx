@@ -5,6 +5,12 @@ description: "Release history for Operator"
 
 ## Unreleased
 
+## 0.6.1 · 2026-03-06
+
+### Fixed
+
+- Anthropic models no longer receive `reasoning_effort="none"` when `thinking: off`, which avoids the LiteLLM 1.82.0 `AttributeError` that previously broke default-thinking requests
+
 ## 0.6.0 · 2026-03-06
 
 ### Added
