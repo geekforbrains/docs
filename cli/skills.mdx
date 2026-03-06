@@ -44,4 +44,4 @@ operator skills reset
 | `job-creator` | Teaches agents how to create and manage scheduled jobs using `manage_job`. |
 | `skill-creator` | Teaches agents how to create and manage skills following the agentskills.io spec. |
 
-Bundled skills are automatically installed to `~/.operator/skills/` on first run if the directory doesn't already exist. On upgrades, new bundled skills are added without touching existing ones.
+Bundled skills are automatically installed to `~/.operator/skills/` on startup when missing. On upgrades, new bundled skills are added without touching existing ones.

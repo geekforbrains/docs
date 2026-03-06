@@ -35,9 +35,9 @@ Under **OAuth & Permissions**, add these bot token scopes:
 Under **Event Subscriptions**, subscribe to:
 
 - `app_mention`
-- `message.channels`
-- `message.groups`
 - `message.im`
+
+`message.im` is required for DM handling. Channel mentions are handled via `app_mention`, so `message.channels` and `message.groups` are optional.
 
 ### 4. Install to Workspace
 
