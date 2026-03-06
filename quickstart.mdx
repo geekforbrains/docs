@@ -31,6 +31,8 @@ This is the fastest path from a clean install to a running Slack-backed agent. I
 - creates your first admin user
 - starts the runtime immediately with `--run`
 
+That configured timezone is used for job scheduling, Slack time formatting, and the fresh current-time context Operator injects into live model requests.
+
 If the `operator` script is not on your `PATH` right after install, use:
 
 ```sh

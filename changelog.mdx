@@ -13,7 +13,7 @@ description: "Release history for Operator"
 ### Changed
 
 - Runtime/process config now lives under `runtime` in `operator.yaml`. `timezone`, `env_file`, `show_usage`, and `reject_response` no longer live under `defaults` or `settings`.
-- The configured timezone is injected into the stable system prompt for chats, jobs, and sub-agents. Operator no longer injects a dynamic current timestamp into that prompt.
+- `runtime.timezone` now drives request-time current-time injection for chats, jobs, and sub-agents. Operator appends a fresh timestamp block to the transient model request only, while keeping the stable system prompt and persisted conversation history unchanged.
 
 ### Fixed
 

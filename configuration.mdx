@@ -17,12 +17,17 @@ runtime:
 
 | Field | Description |
 |-------|-------------|
-| `timezone` | IANA timezone used for job scheduling, Slack message formatting, and the system prompt's default timezone assumption. Defaults to `UTC`. |
+| `timezone` | IANA timezone used for job scheduling, Slack message formatting, the system prompt's default timezone assumption, and request-time current-time injection. Defaults to `UTC`. |
 | `env_file` | Path to env file for API keys. Relative paths resolve from `~/.operator/`. Supports `~` expansion. |
 | `show_usage` | Append token usage stats as a reply after each agent response. Defaults to `false`. |
 | `reject_response` | What happens when an unauthorized user messages an agent. `announce` replies with "You don't have access to this agent." `ignore` silently drops the message. Defaults to `ignore`. |
 
-Operator injects the configured timezone into the stable system prompt and tells agents to interpret ambiguous dates and times in that timezone unless the user says otherwise. It does **not** inject a dynamic current timestamp.
+Operator uses `runtime.timezone` in two places:
+
+- The stable runtime block tells agents to interpret ambiguous dates and times in that timezone unless the user says otherwise.
+- Right before each live model call, Operator injects a fresh current-time block into the request payload for chats, jobs, and sub-agents.
+
+That current-time block is request-only. It is not written to persisted conversation history, does not become part of the stable system prompt, and does not disturb the cacheable prompt prefix.
 
 ## Defaults
 

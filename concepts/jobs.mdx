@@ -28,6 +28,8 @@ The markdown body after the frontmatter is the prompt sent to the agent.
 
 Cron schedules are evaluated in `runtime.timezone` from `operator.yaml`. Jobs also receive that same configured timezone as their default interpretation for ambiguous dates and times in the system prompt.
 
+Each live model call during a job run also gets a fresh current-time block injected at request time in that timezone. The injected block is not written into persisted job conversation history.
+
 ## Model Override
 
 Set `model` in the frontmatter to override the agent's configured model for this job. Uses [LiteLLM format](https://docs.litellm.ai/docs/providers) (`provider/model-name`). When omitted, the agent's model chain from `operator.yaml` is used.

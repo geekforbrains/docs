@@ -76,7 +76,37 @@ The full system prompt is assembled from multiple sources, split into a stable p
 
 The stable prefix is reused across turns via Anthropic prompt-cache breakpoints, reducing token costs for multi-turn conversations.
 
-The runtime block adds timezone guidance, not a live timestamp. Agents are told to interpret ambiguous dates and times using the configured timezone unless the user explicitly says otherwise.
+The runtime block adds stable timezone guidance, not a persisted live timestamp. Agents are told to interpret ambiguous dates and times using the configured timezone unless the user explicitly says otherwise.
+
+## Current Time Injection
+
+Operator gives agents fresh current-time awareness without rewriting stored history.
+
+Before each live model call, Operator:
+
+1. Loads the canonical stored messages for the conversation.
+2. Builds a transient request copy in memory.
+3. Appends a fresh current-time block to the first system message on the dynamic side of the cache boundary.
+4. Sends that transient request to the model, then discards the injected block.
+
+This same request-time path is used for chat turns, scheduled jobs, and spawned sub-agents.
+
+```text
+Stored history:
+- system: stable prompt + dynamic context
+- user: "What time is it?"
+
+Request sent to the model:
+- system: stable prompt + dynamic context + current time block
+- user: "What time is it?"
+
+Persisted after reply:
+- system: stable prompt + dynamic context
+- user: "What time is it?"
+- assistant: "It's 11:31:50 AM PST."
+```
+
+The important constraint is that the injected time block is request-only. It is not persisted to conversation history, so memory harvesting and later turns only see real conversation content plus whatever the assistant explicitly chose to say back.
 
 ## Sandbox
 
