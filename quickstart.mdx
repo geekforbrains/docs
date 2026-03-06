@@ -1,6 +1,6 @@
 ---
 title: "Quickstart"
-description: "Get Operator running in minutes"
+description: "Install and talk to your first agent in under 5 minutes"
 ---
 
 ## Install
@@ -19,21 +19,21 @@ pip install -e .
 
 ## Initialize
 
-Create the `~/.operator/` directory structure with defaults:
-
 ```sh
 operator init
 ```
 
-This creates:
-- `~/.operator/operator.yaml` — runtime configuration
-- `~/.operator/SYSTEM.md` — system preamble
-- `~/.operator/agents/operator/AGENT.md` — default agent prompt
-- `~/.operator/skills/` — bundled skills (`skill-creator`, `job-creator`)
+This scaffolds `~/.operator/` with everything you need:
+- `operator.yaml` — runtime config
+- `SYSTEM.md` — system preamble
+- `agents/operator/AGENT.md` — your first agent
+- `skills/` — bundled starter skills
+
+The command is idempotent — running it again won't overwrite your existing files.
 
 ## Configure
 
-Edit `~/.operator/operator.yaml` with your models and transport:
+Edit `~/.operator/operator.yaml` with your model and transport:
 
 ```yaml
 defaults:
@@ -50,7 +50,7 @@ agents:
       app_token_env: SLACK_APP_TOKEN
 ```
 
-Make sure your API keys are set in `~/.env`:
+Set your API keys in `~/.env`:
 
 ```sh
 ANTHROPIC_API_KEY=sk-ant-...
@@ -58,25 +58,27 @@ SLACK_BOT_TOKEN=xoxb-...
 SLACK_APP_TOKEN=xapp-...
 ```
 
-## Add Yourself
+## Add yourself
 
-Register yourself as an admin user so Operator knows who you are:
+Register as an admin so Operator knows who you are:
 
 ```sh
 operator user add yourname --role admin slack YOUR_SLACK_USER_ID
 ```
 
-## Run
+## Run it
 
 ```sh
 operator
 ```
 
-Operator starts, connects to Slack, and begins listening for messages. Logs are written to `~/.operator/logs/operator.log`.
+That's it. Message your agent in Slack. 🐒
 
-## Run as a Service
+Logs go to `~/.operator/logs/operator.log`.
 
-To run Operator in the background:
+## Run as a service
+
+Want it running in the background?
 
 ```sh
 operator service install   # create launchd/systemd service
@@ -85,19 +87,19 @@ operator service start     # start it
 
 See the [Service CLI](/cli/service) for more details.
 
-## Next Steps
+## Next steps
 
 <CardGroup cols={2}>
   <Card title="Configuration" icon="gear" href="/configuration">
-    Detailed configuration reference.
+    Full configuration reference — models, memory, permissions.
   </Card>
   <Card title="Agents" icon="robot" href="/concepts/agents">
-    Create and customize agents.
+    Create agents, set up delegation, configure sandboxing.
   </Card>
   <Card title="Jobs" icon="clock" href="/concepts/jobs">
-    Set up scheduled tasks.
+    Schedule tasks that run while you sleep.
   </Card>
   <Card title="Skills" icon="wand-magic-sparkles" href="/concepts/skills">
-    Extend agents with skills.
+    Extend your agents with reusable skills.
   </Card>
 </CardGroup>

@@ -1,62 +1,60 @@
 ---
 title: "Introduction"
-description: "Operator is a local AI agent runtime that connects chat platforms to LLMs"
+description: "Deploy autonomous AI agents into your team chat"
 ---
 
-Operator is a local agent runtime that connects chat messages to LLMs via [LiteLLM](https://docs.litellm.ai/).
+<img src="/images/operator_banner.png" alt="Operator" />
 
-It is intentionally small and file-driven:
-- **Markdown files** for agent prompts, jobs, and skills
-- **SQLite** for durable runtime state (memory, messages, runs, jobs)
-- **A single execution path** for both inbound chat and scheduled jobs
+# Agents have joined the chat. 🐒
+
+Operator deploys autonomous AI agents into your team's chat — Slack today, more platforms coming. Define agents in markdown, give them tools and permissions, and let them work alongside your team. They remember context, hand off tasks to each other, and run scheduled jobs while you sleep.
+
+Built for teams, not just individuals. Multi-user auth, role-based access, isolated memories, agent-to-agent delegation, model failover — the boring-but-critical stuff that makes agents actually work in a team setting.
+
+## Why Operator
+
+- **Agents as teammates.** They live in your Slack channels, respond to messages, and post results — just like a coworker who never goes on PTO.
+- **Multi-agent orchestration.** Agents delegate to each other via `spawn_agent`. A coordinator can dispatch work to a researcher, a coder, and a reviewer — each with their own prompt, tools, and permissions.
+- **Team-native.** Multi-user auth with roles. Control who can talk to which agents. Isolated per-user memories. Not a single-player toy.
+- **Markdown-driven.** Agents, jobs, and skills are markdown files with YAML frontmatter. Version them in git, review them in PRs, edit them in your editor. No dashboards, no YAML hellscapes.
+- **Model-agnostic.** Supports 100+ LLM providers out of the box. Define fallback chains so if your primary model is down, the next one picks up automatically.
+- **Runs on your machine.** No SaaS, no cloud dependency, no data leaving your network. Install it, run it, own it.
+
+## Get started
 
 <CardGroup cols={2}>
   <Card title="Quickstart" icon="rocket" href="/quickstart">
-    Install and run Operator in minutes.
+    Install and talk to your first agent in under 5 minutes.
   </Card>
   <Card title="Configuration" icon="gear" href="/configuration">
-    Set up models, agents, memory, and transports.
+    Models, agents, memory, permissions, and transports.
   </Card>
   <Card title="Agents" icon="robot" href="/concepts/agents">
-    Define agent personalities with markdown files.
+    Define agents with markdown files and YAML frontmatter.
   </Card>
   <Card title="Jobs" icon="clock" href="/concepts/jobs">
     Schedule recurring tasks with cron expressions.
   </Card>
 </CardGroup>
 
-## Core Features
-
-- Multiple agents with frontmatter metadata and separate workspaces
-- Cross-agent delegation via `spawn_agent(agent="...")`
-- Model fallback chains (if one model errors, the next is tried)
-- Slack transport with thread continuity
-- Skills discovery from markdown files
-- Scheduled jobs with `prerun` gating and `postrun` hooks
-- Vector memory with automatic harvesting and semantic search
-- Key-value store for operational state
-- Turn-safe context truncation against model token budgets
-
-## Architecture
+## How it works
 
 ```text
 ~/.operator/
 ├── operator.yaml           # runtime config
 ├── SYSTEM.md               # system preamble
-├── logs/
-├── state/
-│   └── operator.db         # SQLite database
-├── shared/                     # files shared across all agents
+├── shared/                 # files shared across all agents
 ├── agents/
 │   └── <agent>/
 │       ├── AGENT.md        # agent prompt
-│       └── workspace/      # agent working directory (shared/ symlinked in)
+│       └── workspace/      # agent working directory
 ├── jobs/
 │   └── <job>/
 │       ├── JOB.md          # job definition
 │       └── scripts/        # prerun/postrun hooks
 └── skills/
     └── <skill>/
-        ├── SKILL.md        # skill definition
-        └── scripts|references|assets/
+        └── SKILL.md        # skill definition
 ```
+
+Everything is files. Agents are markdown. Jobs are markdown. Skills are markdown. Config is YAML. State is SQLite. That's it.

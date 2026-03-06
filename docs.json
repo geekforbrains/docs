@@ -8,6 +8,25 @@
     "dark": "#5B21B6"
   },
   "favicon": "/favicon.svg",
+  "hero": {
+    "title": "Agents have joined the chat.",
+    "description": "Deploy autonomous AI agents into your team's chat. Markdown-driven, team-native, model-agnostic.",
+    "image": {
+      "href": "/images/operator_banner.png",
+      "alt": "Operator — a monkey at the switchboard"
+    },
+    "actions": [
+      {
+        "label": "Get started",
+        "href": "/quickstart"
+      },
+      {
+        "label": "GitHub",
+        "href": "https://github.com/geekforbrains/operator",
+        "variant": "outline"
+      }
+    ]
+  },
   "navigation": {
     "tabs": [
       {
