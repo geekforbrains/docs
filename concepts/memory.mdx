@@ -1,44 +1,178 @@
 ---
 title: "Memory"
-description: "Vector memory with automatic harvesting and semantic search"
+description: "Retention-aware vector memory with automatic harvesting, semantic recall, and CLI debugging"
 ---
 
-Operator includes a vector memory system backed by SQLite and [sqlite-vec](https://github.com/asg017/sqlite-vec). Memories are automatically extracted from conversations, stored as embeddings, and retrieved by semantic similarity.
+Operator includes a vector memory system backed by SQLite and [sqlite-vec](https://github.com/asg017/sqlite-vec). Memories are stored as embeddings, retrieved by semantic similarity, and filtered by an explicit retention model so short-lived context does not quietly turn into permanent noise.
 
-## How It Works
+## How it works
 
-1. **On each message**, relevant memories are retrieved by cosine similarity and injected as context
-2. **The harvester** periodically extracts facts from conversations and stores them as embeddings
-3. **The cleaner** periodically deduplicates, merges, and normalizes stored memories
+1. On each message, Operator embeds the latest user message and searches the active memory store across the allowed scopes.
+2. Search results are filtered by `memory.inject_min_relevance`, truncated by `memory.inject_top_k`, and injected as request-only context.
+3. A scheduled harvester reviews recent conversations and stores only reusable facts, classifying each memory as `candidate` or `durable`.
+4. A scheduled cleaner can deduplicate and normalize active memories within each scope.
+5. Expired candidate memories are excluded from search, CLI listing, cleaner input, and pinned injection.
 
 ## Scopes
 
 Memories are scoped to control visibility:
 
 | Scope | Description |
-|-------|-------------|
-| `user` | Personal facts about a specific user |
-| `agent` | Context specific to an agent |
-| `global` | Shared knowledge across all agents |
+| --- | --- |
+| `user` | Facts about a specific user. In chat, this scope is only available in private conversations. |
+| `agent` | Context specific to one agent, such as project conventions or standing workflow notes. |
+| `global` | Shared knowledge visible across agents. |
 
-## Pinned Memories
+User memories are keyed by Operator username, not platform ID, so they follow the same person across supported transports.
 
-Memories can be **pinned** — pinned memories are always injected into the system prompt regardless of similarity score. Use pinning for critical context that should always be available.
+## Retention model
 
-## Configuration
+Retention is separate from pinning:
 
-See the [memory configuration](/configuration#memory) section for all options including embedding model, harvester schedule, and similarity thresholds.
+| Type | Meaning | Expiry |
+| --- | --- | --- |
+| `candidate` | Short-lived but potentially useful context. | Auto-expires after `memory.candidate_ttl_days`. |
+| `durable` | Long-lived facts worth keeping until explicitly removed. | No automatic expiry. |
+| `pinned` | Injection policy, not a retention horizon. Pinned memories are always injected into the system prompt. | Never auto-expires. |
+
+The important distinction is that `pinned` does not replace retention. A pinned durable memory is still durable. A pinned candidate memory will also be preserved because pinning disables expiry.
+
+## What should be remembered
+
+Good durable memories:
+
+- Stable user preferences
+- Long-lived project conventions
+- Reusable environment facts
+- Standing behavior instructions for an agent
+
+Good candidate memories:
+
+- Short-term context likely to matter again soon
+- Temporary project state that is still worth recall for a limited time
+
+Bad memories:
+
+- One-off tasks
+- Current troubleshooting state
+- Thread-local status notes
+- Branch names
+- Temporary errors
+- Meeting logistics
+
+Examples:
+
+| Keep | Retention |
+| --- | --- |
+| `Use Slack thread replies for daily summaries.` | `durable` |
+| `The project uses uv and Python 3.11.` | `durable` |
+| `Release checklist is active this week.` | `candidate` |
+
+| Do not keep | Why |
+| --- | --- |
+| `The deploy is running right now.` | Ephemeral status |
+| `Tomorrow, draft release notes.` | One-off task |
+| `Branch release-hotfix is active.` | Stale quickly |
+
+## Configuration and tuning
+
+Memory recall remains fully configurable from `operator.yaml`:
+
+```yaml
+memory:
+  embed_model: "openai/text-embedding-3-small"
+  embed_dimensions: 1536
+  max_memories: 10000
+  inject_top_k: 3
+  inject_min_relevance: 0.3
+  candidate_ttl_days: 14
+  harvester:
+    enabled: true
+    schedule: "*/30 * * * *"
+    model: "openai/gpt-4.1-mini"
+  cleaner:
+    enabled: true
+    schedule: "0 3 * * *"
+    model: "openai/gpt-4.1-mini"
+```
+
+The most useful recall tuning knobs are:
+
+- `inject_top_k`: maximum memories injected per request
+- `inject_min_relevance`: minimum cosine similarity required to survive filtering
+- `candidate_ttl_days`: age-based expiry for candidate memories
+
+If recall feels noisy, lower `inject_top_k` and raise `inject_min_relevance`. If short-term context disappears too quickly, raise `candidate_ttl_days`.
+
+See the [memory configuration](/configuration#memory) section for the full reference.
 
 ## Tools
 
 Agents have built-in tools for memory management:
 
 | Tool | Description |
-|------|-------------|
-| `save_memory` | Store a new memory |
-| `search_memories` | Semantic search across memories |
+| --- | --- |
+| `save_memory` | Store a memory with `scope`, `retention`, and optional `pinned` flag |
+| `search_memories` | Semantic search across active memories |
 | `forget_memory` | Delete a specific memory |
-| `list_memories` | List memories with optional filters |
+| `list_memories` | List active memories with scope, retention, and expiry metadata |
+
+Example tool calls:
+
+```text
+save_memory("Use Slack thread replies for daily summaries", scope="agent", retention="durable")
+save_memory("Release checklist is active this week", scope="agent", retention="candidate")
+save_memory("Always include the repo link in handoff messages", scope="agent", retention="durable", pinned=true)
+```
+
+## Debugging memory recall
+
+Start with the CLI:
+
+```sh
+operator memories --scope agent --scope-id researcher
+operator memories stats
+```
+
+Example output:
+
+```text
+ID ┃ Scope            ┃ Retention ┃ Expires              ┃ Content                                 ┃
+━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━
+ 7 │ agent/researcher │ durable   │                      │ Use Slack thread replies for summaries │ ⚑
+ 8 │ agent/researcher │ candidate │ 2026-03-20T17:22:14Z │ Release checklist is active this week  │
+```
+
+```text
+Scope             ┃ Count ┃ Candidate ┃ Durable ┃ Pinned
+━━━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━
+agent/researcher │     2 │         1 │       1 │      1
+global/global    │     1 │         0 │       1 │      0
+─────────────────┼───────┼───────────┼─────────┼───────
+Total            │     3 │         1 │       2 │      1
+```
+
+Then inspect live retrieval behavior in the logs:
+
+```sh
+operator logs -f | rg 'memory recall:|memory injection:'
+```
+
+Example log lines:
+
+```text
+INFO  [researcher:abc123] memory recall: requested_top_k=3 raw_matches=4 filtered_matches=2 returned=2 min_relevance=0.300
+INFO  [researcher:abc123] memory injection: injected=2 retention_mix=candidate=1 durable=1
+```
+
+Those two lines tell you:
+
+- how many vector matches were found
+- how many survived the relevance threshold
+- how many were actually injected
+- whether the final injected mix skewed `candidate` or `durable`
+
+If a candidate memory expires, it disappears from CLI output, semantic search, cleaner input, and automatic injection.
 
 ## CLI
 
@@ -47,4 +181,4 @@ operator memories [--scope/-s SCOPE] [--scope-id/-i ID] [--pinned] [--limit/-n N
 operator memories stats
 ```
 
-See [Memories CLI](/cli/memories) for details.
+See [Memories CLI](/cli/memories) for command details and more examples.

@@ -55,10 +55,17 @@ See [Cross-Agent Spawning](/concepts/agents#cross-agent-spawning) for details.
 
 | Tool | Description |
 |------|-------------|
-| `save_memory` | Store a memory with scope and optional pin |
+| `save_memory` | Store a memory with scope, retention, and optional pin |
 | `search_memories` | Semantic search across stored memories |
 | `forget_memory` | Delete a specific memory |
-| `list_memories` | List memories with filters |
+| `list_memories` | List active memories with retention and expiry metadata |
+
+Example:
+
+```text
+save_memory("Use Slack thread replies for summaries", scope="agent", retention="durable")
+save_memory("Release checklist is active this week", scope="agent", retention="candidate")
+```
 
 ## Key-Value Store
 

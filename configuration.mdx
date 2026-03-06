@@ -157,8 +157,9 @@ memory:
   embed_model: "openai/text-embedding-3-small"
   embed_dimensions: 1536
   max_memories: 10000
-  inject_top_k: 5
-  inject_min_relevance: 0.1
+  inject_top_k: 3
+  inject_min_relevance: 0.3
+  candidate_ttl_days: 14
   harvester:
     enabled: true
     schedule: "*/30 * * * *"
@@ -174,18 +175,34 @@ memory:
 | `embed_model` | Required when any memory service is enabled. |
 | `embed_dimensions` | Embedding vector size. |
 | `max_memories` | Per-scope soft cap. |
-| `inject_top_k` | Memories injected per message. |
-| `inject_min_relevance` | Cosine similarity threshold. |
+| `inject_top_k` | Maximum memories injected per message after filtering. Set `0` to disable automatic semantic recall. |
+| `inject_min_relevance` | Minimum cosine similarity required for a memory to survive retrieval filtering. |
+| `candidate_ttl_days` | Age-based TTL for `candidate` memories. `durable` memories do not expire automatically. |
 
 ### Harvester
 
-Extracts facts from conversations using an LLM and stores them as vector embeddings in SQLite (via sqlite-vec). When enabled, `schedule` and `model` are required.
+Extracts reusable facts from conversations using an LLM and stores them as vector embeddings in SQLite (via sqlite-vec). The harvester classifies memories as `candidate` or `durable` and is intentionally strict about rejecting thread-local noise. When enabled, `schedule` and `model` are required.
 
 ### Cleaner
 
-Deduplicates, merges, and tidies stored memories by sending them through an LLM. When enabled, `schedule` and `model` are required.
+Deduplicates, merges, and tidies active memories by sending them through an LLM. Expired candidate memories are excluded before the cleaner runs. When enabled, `schedule` and `model` are required.
 
-See [Memory](/concepts/memory) for more on scopes, pinning, and retrieval.
+### Recall debugging
+
+Operator emits retrieval and injection logs so you can tune memory without code changes. Expect lines like:
+
+```text
+INFO  [researcher:abc123] memory recall: requested_top_k=3 raw_matches=4 filtered_matches=2 returned=2 min_relevance=0.300
+INFO  [researcher:abc123] memory injection: injected=2 retention_mix=candidate=1 durable=1
+```
+
+Use `inject_top_k`, `inject_min_relevance`, and `candidate_ttl_days` together:
+
+- Lower `inject_top_k` if too much context is being injected
+- Raise `inject_min_relevance` if recall is noisy
+- Raise `candidate_ttl_days` if short-term context disappears too quickly
+
+See [Memory](/concepts/memory) for more on scopes, retention, pinning, and retrieval.
 
 ## Jobs and Inheritance
 
