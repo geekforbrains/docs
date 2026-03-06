@@ -64,16 +64,19 @@ The full system prompt is assembled from multiple sources, split into a stable p
 
 **Stable prefix** (cached across turns):
 1. **`SYSTEM.md`** — system preamble (auto-created at `~/.operator/SYSTEM.md`)
-2. **`AGENT.md`** — agent prompt body (frontmatter stripped)
-3. **Available skills** — discovered from `skills/*/SKILL.md`
-4. **Available agents** — discovered from `agents/*/AGENT.md` frontmatter (other agents only)
+2. **Runtime block** — stable runtime instructions, including `runtime.timezone`
+3. **`AGENT.md`** — agent prompt body (frontmatter stripped)
+4. **Available skills** — discovered from `skills/*/SKILL.md`
+5. **Available agents** — discovered from `agents/*/AGENT.md` frontmatter (other agents only)
 
 **Dynamic suffix** (changes per conversation/turn):
-5. **Context block** — platform, channel, user, workspace info (or job block for jobs)
-6. **Pinned memories** — always injected regardless of similarity (chat only)
-7. **Transport extras** — e.g. Slack channel list, messaging instructions
+6. **Context block** — platform, channel, user, workspace info (or job block for jobs)
+7. **Pinned memories** — always injected regardless of similarity (chat only)
+8. **Transport extras** — e.g. Slack channel list, messaging instructions
 
 The stable prefix is reused across turns via Anthropic prompt-cache breakpoints, reducing token costs for multi-turn conversations.
+
+The runtime block adds timezone guidance, not a live timestamp. Agents are told to interpret ambiguous dates and times using the configured timezone unless the user explicitly says otherwise.
 
 ## Sandbox
 

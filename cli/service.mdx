@@ -6,7 +6,7 @@ description: "Run Operator as a background service"
 Operator can run as a background service using launchd (macOS) or systemd (Linux).
 
 ```sh
-operator service install       # generate and load a service definition
+operator service install       # install or refresh the service definition
 operator service uninstall     # unload and remove the service definition
 operator service start         # start the background service
 operator service stop          # stop the background service
@@ -17,3 +17,15 @@ operator service status        # show whether the service is running
 ## PATH Capture
 
 `service install` captures your current shell's `PATH` and embeds it in the service definition. This means tools installed via Homebrew, pyenv, nvm, etc. are available to your agents even when running under launchd/systemd. If you install new tools, re-run `operator service install` to update the PATH.
+
+## Installed Files
+
+- macOS: `~/Library/LaunchAgents/ai.operator.plist`
+- Linux: `~/.config/systemd/user/operator.service`
+
+Both service definitions write stdout/stderr to `~/.operator/logs/operator.log`.
+
+## Platform Behavior
+
+- macOS: `operator service install` unloads any existing plist, writes the new one, and loads it with launchd.
+- Linux: `operator service install` writes the user unit and enables it with systemd. Use `operator service start` to start it immediately.

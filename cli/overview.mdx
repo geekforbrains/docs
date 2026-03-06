@@ -25,10 +25,14 @@ In job hook scripts, `OPERATOR_AGENT` is set automatically.
 ## Setup
 
 ```sh
-operator init              # scaffold ~/.operator/ with starter config and agent
+operator setup             # guided onboarding
+operator setup --run       # guided onboarding and start immediately
+operator init              # scaffold ~/.operator/ with starter files only
 ```
 
-Creates the directory structure, `operator.yaml`, `SYSTEM.md`, a default `AGENT.md`, and installs bundled skills. Safe to run multiple times — existing files and skills are not overwritten.
+`operator setup` is the recommended first-run path. It scaffolds `~/.operator/`, prompts for provider, timezone, Slack tokens, and admin identity, then persists the minimum config needed to start using Operator.
+
+`operator init` only creates the directory structure, `operator.yaml`, `SYSTEM.md`, a default `AGENT.md`, and bundled skills. Safe to run multiple times — existing files and skills are not overwritten.
 
 ## Inspection Commands
 

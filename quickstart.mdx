@@ -17,31 +17,58 @@ cd operator
 pip install -e .
 ```
 
-## Initialize
+## Guided Setup
 
 ```sh
-operator init
+operator setup --run
 ```
 
-This scaffolds `~/.operator/` with everything you need:
+This is the fastest path from a clean install to a running Slack-backed agent. It:
+- scaffolds `~/.operator/`
+- asks which model provider you want to use
+- detects your local timezone and lets you confirm or change it
+- saves provider and Slack credentials into `runtime.env_file`
+- creates your first admin user
+- starts the runtime immediately with `--run`
+
+If the `operator` script is not on your `PATH` right after install, use:
+
+```sh
+python3 -m operator_ai setup --run
+```
+
+## What Setup Creates
+
+Setup leaves you with the same file layout as `operator init`:
 - `operator.yaml` — runtime config
 - `.env` — API key file (add your keys here)
 - `SYSTEM.md` — system preamble
 - `agents/operator/AGENT.md` — your first agent
 - `skills/` — bundled starter skills
 
-The command is idempotent — running it again won't overwrite your existing files.
+The scaffold step is idempotent — existing files are not overwritten.
 
-## Configure
+## Manual Setup
 
-Edit `~/.operator/operator.yaml` with your model and transport:
+If you want to configure everything yourself instead, run:
+
+```sh
+operator init
+```
+
+Then edit `~/.operator/operator.yaml` with your runtime, model, and transport:
 
 ```yaml
+runtime:
+  timezone: "America/Vancouver"
+  env_file: ".env"
+  show_usage: false
+  reject_response: ignore
+
 defaults:
   models:
     - "anthropic/claude-sonnet-4-6"
   max_iterations: 25
-  env_file: ".env"
 
 agents:
   operator:
@@ -51,7 +78,7 @@ agents:
       app_token_env: SLACK_APP_TOKEN
 ```
 
-Set your API keys in `~/.operator/.env` (created by `operator init`):
+Set your API keys in `~/.operator/.env` (created by `operator setup` or `operator init`):
 
 ```sh
 ANTHROPIC_API_KEY=sk-ant-...
@@ -59,9 +86,11 @@ SLACK_BOT_TOKEN=xoxb-...
 SLACK_APP_TOKEN=xapp-...
 ```
 
-## Add yourself
+## Add yourself (manual path)
 
-Register as an admin so Operator knows who you are:
+Skip this if you used `operator setup` — it already created your first admin user.
+
+If you used the manual path, register yourself as an admin so Operator knows who you are:
 
 ```sh
 operator user add yourname --role admin slack YOUR_SLACK_USER_ID
@@ -73,6 +102,8 @@ operator user add yourname --role admin slack YOUR_SLACK_USER_ID
 operator
 ```
 
+If you used `operator setup --run`, the runtime is already started. Otherwise, run `operator` now.
+
 That's it. Message your agent in Slack. 🐒
 
 Logs go to `~/.operator/logs/operator.log`.
@@ -82,9 +113,11 @@ Logs go to `~/.operator/logs/operator.log`.
 Want it running in the background?
 
 ```sh
-operator service install   # create launchd/systemd service
-operator service start     # start it
+operator service install   # install the service definition
+operator service start     # start it when needed
 ```
+
+On macOS, `operator service install` writes and loads `~/Library/LaunchAgents/ai.operator.plist`. On Linux, it writes `~/.config/systemd/user/operator.service` and enables it.
 
 See the [Service CLI](/cli/service) for more details.
 

@@ -125,7 +125,7 @@ Skills that need API keys or secrets should **never** hardcode them. Instead:
    Authenticate using `$GITHUB_TOKEN` in shell commands.
    ```
 
-3. Users add values to their `.env` file (configured via `defaults.env_file` in `operator.yaml`).
+3. Users add values to their `.env` file (configured via `runtime.env_file` in `operator.yaml`).
 
 Operator validates `metadata.env` at startup and warns about any missing variables.
 

@@ -3,6 +3,23 @@ title: "Changelog"
 description: "Release history for Operator"
 ---
 
+## Unreleased
+
+### Added
+
+- **Guided setup onboarding** — `operator setup` now walks through provider selection, timezone detection, Slack credentials, and first-admin creation. Use `operator setup --run` to start the runtime immediately after onboarding.
+- **`python -m operator_ai` entrypoint** — you can now run Operator via the Python module entrypoint when the `operator` script is not yet on your `PATH`.
+
+### Changed
+
+- Runtime/process config now lives under `runtime` in `operator.yaml`. `timezone`, `env_file`, `show_usage`, and `reject_response` no longer live under `defaults` or `settings`.
+- The configured timezone is injected into the stable system prompt for chats, jobs, and sub-agents. Operator no longer injects a dynamic current timestamp into that prompt.
+
+### Fixed
+
+- `run_skill` now expands environment variable references in skill arguments before execution.
+- Config loading now fails through `ConfigError` internally and is converted at CLI/runtime boundaries, avoiding hard `SystemExit` behavior in library-style callers.
+
 ## 0.5.1
 
 ### Fixed
@@ -68,7 +85,7 @@ description: "Release history for Operator"
 - **`manage_skill` tool** — agents can create, update, and delete skills at runtime
 - **`operator skills reset`** — CLI command to restore bundled skills to their original version
 - **Transport-scoped read tools** — Slack transport adds `list_channels`, `read_channel`, and `read_thread`
-- **Timezone config** — `defaults.timezone` sets the IANA timezone for timestamps and job scheduling (defaults to UTC)
+- **Timezone config** — added IANA timezone support for scheduling and prompt behavior (configured via `runtime.timezone` in current releases)
 
 ### Fixed
 
