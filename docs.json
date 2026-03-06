@@ -63,6 +63,7 @@
             "group": "CLI Reference",
             "pages": [
               "cli/overview",
+              "cli/runtime",
               "cli/users",
               "cli/service",
               "cli/jobs",

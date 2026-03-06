@@ -1,80 +1,117 @@
 ---
 title: "Users & Auth"
-description: "Identity, roles, and access control for transport messages"
+description: "How Operator authenticates people and maps them to allowed agents"
 ---
 
-Every inbound message is authenticated. There is no toggle — auth is always on.
+Every inbound transport message is authenticated. There is no “disable auth” mode in the runtime.
 
-## Identity
+## Scan First
 
-Users are identified by a stable `username` (lowercase alphanumeric, dots, hyphens, 1–64 chars). Multiple transport identities can map to a single username, so the same person on Slack and Telegram resolves to one user.
+- Unknown users are rejected.
+- `admin` is built in and grants access to every agent.
+- Custom roles map to explicit agent lists.
+- Allowed agents are the union of the user's roles.
+- `runtime.reject_response` decides whether rejections are silent or announced.
 
-Platform IDs follow the format `transport:platform_id`:
+## Identity Model
 
-```
+Users are stored as stable usernames:
+
+- lowercase letters, numbers, dots, and hyphens only
+- length `1-64`
+
+Transport identities are stored as `transport:external_id`, for example:
+
+```text
 slack:U04ABC123
 telegram:12345678
 ```
 
-Display names are not stored. They are resolved at runtime from transport APIs.
+The current runtime transport is Slack, but the user database can store arbitrary transport prefixes.
 
 ## Roles
-
-The `admin` role is built-in and hardcoded. It grants access to all agents and admin-only tools like `manage_users`. Defining `admin` in the config `roles` block is a validation error.
-
-Custom roles are defined in `operator.yaml` and map to agent access:
 
 ```yaml
 roles:
   team:
     agents: [operator, researcher]
-  viewer:
-    agents: [researcher]
+  guest:
+    agents: [operator]
 ```
 
-A user can have multiple roles — allowed agents are the union of all role agent lists. If a user holds a role that isn't defined in config, that role grants no agent access (a warning is logged at startup).
+Rules:
 
-## Auth Flow
+- `admin` is built in and cannot be declared in `operator.yaml`
+- multiple roles are allowed
+- allowed agents are the union of the listed agent names
+- undefined custom roles are stored but grant no access until they are defined in config
 
-On every inbound message:
+`operator user add` warns when you assign a non-admin role that is not currently defined in config.
 
-1. Resolve `platform_id` to `username`
-2. Resolve `username` to `roles`
-3. Resolve `roles` to allowed agents
-4. If the user is unknown or not allowed for the target agent, reject
+## Runtime Auth Flow
 
-Rejection behavior is controlled by `runtime.reject_response`:
+On each incoming Slack message:
 
-| Value | Behavior |
-|-------|----------|
-| `"ignore"` | Silently drop the message (default) |
-| `"announce"` | Reply with a rejection message |
+1. resolve `slack:<user_id>` to a username
+2. load that user's roles
+3. resolve roles to the set of allowed agents
+4. reject the message if the target agent is not allowed
 
-If no users exist in the database, all messages are rejected. A log warning suggests running `operator user add`.
+If the user has `admin`, access is unrestricted.
 
-Auth applies to transport messages only — [jobs](/concepts/jobs) bypass auth entirely.
+## Rejection Behavior
 
-## Memory Scoping
+```yaml
+runtime:
+  reject_response: ignore
+```
 
-User memories are keyed by `username`, not platform ID. This means memories persist across transports — talk on Slack, memories available on Telegram.
+| Value | Runtime behavior |
+| --- | --- |
+| `ignore` | silently drop the message |
+| `announce` | reply with `You don't have access to this agent.` |
 
-## Managing Users
+If there are no users in the database at all, the runtime still rejects inbound messages. `operator setup` is the easiest way to create the first admin.
 
-**CLI:**
+## CLI Management
 
 ```sh
 operator user add gavin --role admin slack U04ABC123
-operator user remove gavin
-operator user link gavin telegram 12345678
-operator user unlink gavin slack U04ABC123
+operator user link gavin slack U07XYZ999
 operator user add-role gavin team
-operator user remove-role gavin team
 operator user list
 operator user info gavin
 ```
 
-**Chat:** Use the `manage_users` tool (admin-only).
+Important distinctions:
 
-## Role-Gated Tools
+- `operator user add` creates the user, assigns a role, and links the identity in one command
+- `operator user link` adds another transport identity to an existing user
+- `operator user remove` deletes the user, roles, and identities together
 
-Some tools require a specific role to execute. Currently `manage_users` requires `admin`. The tool stays visible to the LLM but execution is blocked for unauthorized users.
+See [Users CLI](/cli/users) for full command behavior.
+
+## `manage_users` Tool
+
+The built-in `manage_users` tool is runtime-only and **admin-gated**.
+
+Its `add` action creates a user and assigns a role, but it does **not** link a transport identity. Linking is a separate action:
+
+```text
+manage_users(action="add", username="alex", role="team")
+manage_users(action="link", username="alex", transport="slack", external_id="U123ABC45")
+```
+
+Non-admin users can still see the tool in the model surface, but execution is blocked with an error.
+
+## Memory Scope Interaction
+
+In private conversations, live chat memory uses the authenticated user context for `user`-scoped memory. In public channels, `user` scope is unavailable and only `agent` plus `global` memory is considered.
+
+Scheduled jobs do not use user-scoped memory at all.
+
+## Related Docs
+
+- [Configuration](/configuration)
+- [Built-in Tools](/concepts/tools)
+- [Slack](/transports/slack)

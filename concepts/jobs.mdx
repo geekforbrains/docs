@@ -1,102 +1,164 @@
 ---
 title: "Jobs"
-description: "Schedule recurring tasks with cron expressions"
+description: "Scheduled markdown-defined tasks with cron, hooks, and runtime state"
 ---
 
-Jobs are scheduled tasks defined as markdown files with YAML frontmatter. Each job lives at `~/.operator/jobs/<name>/JOB.md`.
+Jobs are stored in `~/.operator/jobs/<name>/JOB.md`.
 
-## Job Format
+## Scan First
+
+- Cron schedules are evaluated in `runtime.timezone`.
+- Job prompts are markdown bodies under YAML frontmatter.
+- `prerun` can gate a job by returning non-zero.
+- `postrun` receives the final model output on stdin.
+- Scheduled jobs only get transport messaging if the target agent has a runtime transport.
+- `operator job run` always uses a CLI transport and prints `send_message` output locally.
+
+## Job File Format
 
 ```yaml
 ---
 name: daily-summary
-description: Summarize today's activity
+description: Summarize yesterday's activity
 schedule: "0 9 * * *"
 agent: operator
 model: "anthropic/claude-sonnet-4-6"
 max_iterations: 10
+enabled: true
 hooks:
   prerun: scripts/check.sh
-  postrun: scripts/notify.sh
-enabled: true
+  postrun: scripts/publish.sh
 ---
 
 Summarize the key events from the last 24 hours.
-Post a one-line teaser to #general, then reply in a thread with the full summary.
+Post a short teaser to #general, then reply in a thread with the full summary.
 ```
 
-The markdown body after the frontmatter is the prompt sent to the agent.
+The body is the user prompt for the job run.
 
-Cron schedules are evaluated in `runtime.timezone` from `operator.yaml`. Jobs also receive that same configured timezone as their default interpretation for ambiguous dates and times in the system prompt.
+## Scheduler Behavior
 
-Each live model call during a job run also gets a fresh current-time block injected at request time in that timezone. The injected block is not written into persisted job conversation history.
+The background runtime:
 
-## Execution Overrides
+- scans `jobs/*/JOB.md`
+- checks cron matches once per minute
+- skips disabled jobs
+- increments `skip_count` when a previous run of the same job is still active
 
-Jobs support two execution overrides in frontmatter:
+The cron match uses `runtime.timezone`.
 
-| Field | Description |
-|-------|-------------|
-| `model` | Override the agent's configured model for this job. |
-| `max_iterations` | Override the agent's max tool-call loop count for this job. |
+## Agent Selection
 
-`model` uses [LiteLLM format](https://docs.litellm.ai/docs/providers) (`provider/model-name`). When omitted, the agent's model chain from `operator.yaml` is used.
+The execution agent is:
 
-This is useful for running cheaper models on simple recurring tasks:
+1. `job.agent`, if present
+2. otherwise the default agent from config
 
-```yaml
----
-name: link-check
-schedule: "0 */6 * * *"
-model: "anthropic/claude-haiku-4-5"
----
+That chosen agent supplies:
 
-Check all links in the docs site and report any 404s.
-```
+- the prompt body from `AGENT.md`
+- the runtime timezone contract
+- permissions
+- sandbox setting
+- `thinking`
+- `context_ratio`
+- `max_output_tokens`
+- the default `models` fallback chain when `job.model` is unset
 
-## Thinking Inheritance
+## What Jobs May Override
 
-Jobs do not have a per-job `thinking` field.
+Job frontmatter supports two execution overrides:
 
-- `thinking` comes from the resolved agent config.
-- If you set `model` on the job, that only changes the model selection.
-- `context_ratio` and `max_output_tokens` also continue to come from the agent/default config.
+| Field | Meaning |
+| --- | --- |
+| `model` | replaces the agent model chain with a single model |
+| `max_iterations` | overrides the agent/default iteration cap |
 
-If you want a job to use a different thinking level, run it under a different agent or add an agent-level override.
+Jobs do **not** support per-job `thinking`, `context_ratio`, or `max_output_tokens`.
 
-See [Models & Thinking](/concepts/models) for the full inheritance rules.
+## Messaging Behavior
+
+Scheduled jobs use the selected agent's configured transport when one exists.
+
+That means:
+
+- jobs targeting a Slack-connected agent can call `send_message`
+- jobs targeting a headless agent still run, but transport tools like `send_message` and `send_file` will error during scheduled execution
+
+`operator job run <name>` is different:
+
+- it does **not** post to Slack
+- it injects a CLI transport
+- `send_message` output is printed in your terminal
+
+<Note>
+  `operator job run` ignores the cron schedule and runs the job immediately, even if the job is disabled.
+</Note>
 
 ## Hooks
 
-| Hook | Description |
-|------|-------------|
-| `prerun` | Gate script — non-zero exit skips LLM execution. |
-| `postrun` | Receives model output on stdin. |
+```yaml
+hooks:
+  prerun: scripts/check.sh
+  postrun: scripts/publish.sh
+```
 
-Hook scripts receive these environment variables:
+| Hook | Behavior |
+| --- | --- |
+| `prerun` | runs before the LLM call; non-zero exit marks the run as `gated` and skips the model |
+| `postrun` | runs after the final model output; receives that output on stdin |
 
-| Variable | Description |
-|----------|-------------|
-| `JOB_NAME` | Name of the job being executed |
-| `OPERATOR_AGENT` | Agent running the job |
-| `OPERATOR_HOME` | Operator base directory (resolved absolute path) |
-| `OPERATOR_DB` | Path to the SQLite database |
+Hook paths must be **relative** and must remain inside the job directory. Absolute paths and `..` escapes are rejected.
 
-## Posting Results
+Job hooks receive:
 
-The agent uses `send_message` to post results to Slack channels. The prompt body should include posting instructions (which channels, whether to thread, etc.). If there's nothing to post, simply don't call `send_message`.
+| Variable | Value |
+| --- | --- |
+| `JOB_NAME` | current job name |
+| `OPERATOR_AGENT` | agent running the job |
+| `OPERATOR_HOME` | Operator base directory |
+| `OPERATOR_DB` | path to `operator.db` |
 
-## Job Counters
+The hook working directory is the job directory.
 
-Each job tracks four counters in SQLite:
+## Memory In Jobs
 
-| Counter | Incremented when |
-|---------|-----------------|
-| `run_count` | LLM actually executed (success or error) |
-| `error_count` | LLM ran but threw an exception |
-| `gate_count` | `prerun` hook returned non-zero (job skipped) |
-| `skip_count` | Cron fired but the previous run was still in progress |
+Jobs do not use user-scoped memory.
+
+Job recall and pinned-memory injection only use:
+
+- `agent/<agent-name>`
+- `global/global`
+
+This keeps scheduled work from depending on a specific human user's private context.
+
+## Output Rules
+
+The job system prompt explicitly tells the model:
+
+- its plain text responses are internal
+- if it wants to publish something, it must call `send_message`
+- if nothing should be published, it should not call `send_message`
+
+That is why posting instructions belong in the job body, not in memory or KV.
+
+## Runtime State
+
+Each job has persisted runtime counters:
+
+| Field | Meaning |
+| --- | --- |
+| `last_run` | ISO timestamp of the last attempt |
+| `last_result` | `success`, `error`, or `gated` |
+| `last_duration_seconds` | rounded duration |
+| `last_error` | error string for the last failed run |
+| `run_count` | number of runs that reached model execution |
+| `error_count` | number of failed runs after execution started |
+| `gate_count` | number of prerun-gated runs |
+| `skip_count` | number of scheduler skips because a prior run was still active |
 
 ## Managing Jobs
 
-Use the [CLI](/cli/jobs) to list, inspect, enable/disable, and manually trigger jobs.
+- Create or edit files manually in `~/.operator/jobs/`
+- Use the built-in `manage_job` tool for runtime creation/update/delete
+- Use the [Jobs CLI](/cli/jobs) to inspect, enable, disable, and manually run jobs

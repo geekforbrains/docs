@@ -1,177 +1,160 @@
 ---
 title: "Skills"
-description: "Extend agents with reusable capability modules"
+description: "Reusable instruction modules with optional scripts, references, and assets"
 ---
 
-Skills are reusable instruction documents that teach agents new capabilities. They follow the [agentskills.io](https://agentskills.io) open spec — a portable format supported by Claude Code, Cursor, Gemini CLI, and other agent products.
+Skills live in `~/.operator/skills/<name>/` and are described by `SKILL.md`.
 
-Each skill lives at `~/.operator/skills/<name>/` and contains a `SKILL.md` file with YAML frontmatter and markdown instructions.
+## Scan First
 
-## How Skills Work
+- Operator follows the agentskills.io frontmatter rules.
+- At startup, only skill metadata is injected into the prompt.
+- Agents use `read_skill` for progressive disclosure and `run_skill` for skill scripts.
+- Missing bundled skills are auto-installed on `operator init` and runtime startup.
+- Skill permissions are separate from tool permissions.
 
-Skills use **progressive disclosure** to manage context efficiently:
-
-1. **Discovery** — At startup, only the `name` and `description` from each skill are loaded into the system prompt.
-2. **Activation** — When a task matches a skill's description, the agent reads the full `SKILL.md` body.
-3. **Resources** — Files in `scripts/`, `references/`, and `assets/` are loaded only when explicitly referenced.
-
-This keeps the system prompt lean while giving agents access to deep knowledge on demand.
-
-## Directory Structure
+## Directory Layout
 
 ```text
 ~/.operator/skills/
 └── my-skill/
-    ├── SKILL.md           # Required: metadata + instructions
-    ├── scripts/           # Optional: executable code
-    ├── references/        # Optional: detailed docs loaded on demand
-    └── assets/            # Optional: templates, data files
+    ├── SKILL.md
+    ├── scripts/
+    ├── references/
+    └── assets/
 ```
 
-## SKILL.md Format
+Only `SKILL.md` is required.
 
-Every skill requires a `SKILL.md` file with YAML frontmatter and a markdown body.
-
-### Frontmatter
+## `SKILL.md`
 
 ```yaml
 ---
 name: pr-reviewer
-description: >-
-  Reviews GitHub pull requests by analyzing diffs, checking for common
-  issues, and posting structured review comments. Use when asked to review
-  a PR, check code quality, or provide feedback on changes.
+description: Reviews pull requests and highlights risks, regressions, and missing tests.
 metadata:
   env:
     - GITHUB_TOKEN
 ---
-```
 
-#### Required Fields
-
-| Field | Constraints |
-|-------|-------------|
-| `name` | 1–64 characters. Lowercase letters, numbers, and hyphens only. No leading, trailing, or consecutive hyphens. Must match the parent directory name. |
-| `description` | 1–1024 characters. Describes what the skill does **and** when to use it. Write in third person. |
-
-#### Optional Fields
-
-| Field | Description |
-|-------|-------------|
-| `license` | License name or reference to a bundled license file. |
-| `compatibility` | Environment requirements (max 500 chars). E.g. "Requires git, docker, and internet access". |
-| `metadata` | Arbitrary key-value mapping. `metadata.env` is an Operator convention — a list of environment variable names the skill requires. |
-| `allowed-tools` | Space-delimited list of pre-approved tools (experimental). |
-
-### Body
-
-The markdown body after frontmatter contains the skill instructions. Write whatever helps the agent perform the task — step-by-step instructions, examples, edge cases, references to bundled files.
-
-```markdown
 # PR Reviewer
 
-## Steps
-
-1. Fetch the PR diff using `gh pr diff <number>`
-2. Analyze for security issues, logic errors, style consistency, missing tests
-3. Post a structured review using `gh pr review <number>`
-
-## Review Format
-
-### Summary
-One paragraph overview of the changes.
-
-### Issues
-Bulleted list, severity-tagged: `[critical]`, `[suggestion]`, `[nit]`.
-
-### Verdict
-APPROVE, REQUEST_CHANGES, or COMMENT with a one-line rationale.
+1. Read the PR description.
+2. Inspect the diff.
+3. Prioritize correctness, security, behavior changes, and missing tests.
+4. Return findings first, then a short summary.
 ```
 
-Keep the body under **500 lines**. For longer content, split into `references/` files and link from `SKILL.md`:
+### Frontmatter Rules
 
-```markdown
-For the full API schema, see [references/schema.md](references/schema.md).
-```
+| Field | Required | Rules |
+| --- | --- | --- |
+| `name` | yes | lowercase letters, numbers, and hyphens only; must match the directory name; max 64 chars |
+| `description` | yes | max 1024 chars |
+| `metadata.env` | no | string or list of required env var names |
 
-Keep file references **one level deep** from SKILL.md — avoid chains of files referencing other files.
+The body must not be empty. Operator also warns when the body exceeds 500 lines and recommends moving detailed material into `references/`.
 
-## Path References
+## Progressive Disclosure
 
-When referencing files under the Operator base directory in skill instructions or scripts, always use `$OPERATOR_HOME` instead of `~/.operator`. Tilde expansion is a shell feature and breaks in non-shell contexts (e.g. `node ~/...` treats `~` as a literal directory name). `$OPERATOR_HOME` is set by the runtime and expands correctly everywhere.
+Skills are intentionally loaded in layers:
 
-```markdown
-# Good
-node $OPERATOR_HOME/skills/my-skill/scripts/run.js
+1. **Discovery:** only `name` and `description` are shown in the system prompt
+2. **Activation:** the agent reads `SKILL.md`
+3. **Deep reference:** the agent reads specific `references/` or `assets/` files only when needed
 
-# Bad — tilde may not expand
-node ~/.operator/skills/my-skill/scripts/run.js
-```
+This keeps the prompt surface small while still supporting detailed skills.
+
+## `read_skill` and `run_skill`
+
+### `read_skill`
+
+Use `read_skill(skill, path="")` to read:
+
+- `SKILL.md`
+- files under `references/`
+- files under `assets/`
+
+Path traversal is blocked.
+
+### `run_skill`
+
+Use `run_skill(skill, command, timeout=120)` when the skill includes scripts or command examples.
+
+Important behavior:
+
+- command strings are parsed with `shlex`
+- execution uses `shell=False`
+- pipes, redirects, and command chaining are not available unless you explicitly invoke a shell yourself
+- subprocess `cwd` is the agent workspace, not the skill directory
+- `SKILL_DIR` is set automatically
+- arguments starting with `scripts/`, `references/`, or `assets/` are expanded to absolute paths inside the skill
+- transport token env vars and most `OPERATOR_*` vars are stripped before execution
+- `$OPERATOR_HOME` is preserved
 
 ## Environment Variables
 
-Skills that need API keys or secrets should **never** hardcode them. Instead:
+Declare required variables in frontmatter:
 
-1. List required env vars in `metadata.env`:
-   ```yaml
-   metadata:
-     env:
-       - GITHUB_TOKEN
-       - SLACK_WEBHOOK_URL
-   ```
+```yaml
+metadata:
+  env:
+    - GITHUB_TOKEN
+    - STRIPE_API_KEY
+```
 
-2. Reference them by name in instructions:
-   ```markdown
-   Authenticate using `$GITHUB_TOKEN` in shell commands.
-   ```
+Operator surfaces missing env vars in:
 
-3. Users add values to their `.env` file (configured via `runtime.env_file` in `operator.yaml`).
-
-Operator validates `metadata.env` at startup and warns about any missing variables.
+- `operator skills`
+- `operator skills list`
+- the injected skills prompt shown to agents
 
 ## Bundled Skills
 
-Operator ships with bundled skills that are installed automatically on `operator init` and on first startup. Currently bundled:
+Operator currently ships with:
 
-- **skill-creator** — Teaches agents how to create, update, and manage skills. This is the bootstrap skill that enables agents to extend their own capabilities.
-- **job-creator** — Teaches agents how to create, update, and manage scheduled jobs using `manage_job`. Covers JOB.md anatomy, cron schedules, prompt writing, stateful KV patterns, hooks, and the critical `send_message` delivery rule.
+| Skill | Purpose |
+| --- | --- |
+| `job-creator` | teaches agents how to create and manage scheduled jobs |
+| `skill-creator` | teaches agents how to create and refine skills themselves |
 
-Bundled skills are copied into `~/.operator/skills/` and are fully editable. If you modify a bundled skill and want to restore the original, use the [skills CLI](/cli/skills).
-
-## Creating Skills
-
-Agents can create skills using the `manage_skill` tool:
-
-```
-manage_skill(action="create", name="my-skill", config="<full SKILL.md content>")
-```
-
-The bundled `skill-creator` skill teaches agents how to write effective skills. Ask your agent to "create a skill for X" and it will follow the spec automatically.
-
-You can also create skills manually by adding a directory to `~/.operator/skills/` with a `SKILL.md` file.
+You can restore bundled skill directories with the [Skills CLI](/cli/skills).
 
 ## Permissions
-
-Skills can be filtered per-agent using `permissions.skills` in `operator.yaml`:
 
 ```yaml
 agents:
   operator:
     permissions:
-      skills: [pr-reviewer, deploy-staging]
+      skills: [job-creator, skill-creator]
 ```
 
-When set, only the listed skills are available to that agent. Omit `skills` entirely to grant access to all skills.
+If `permissions.skills` is set, only the listed skills are available to that agent.
 
-Agents without `run_shell` access can still use skills via the `read_skill` and `run_skill` tools — see [Built-in Tools](/concepts/tools#skill-access) for details.
+This is independent from tool permissions. An agent might be allowed to see a skill but still lack `run_shell`, in which case `run_skill` can still be the right interface.
 
-## Managing Skills
+## Creating and Updating Skills
 
-<CardGroup cols={2}>
-  <Card title="Skills CLI" icon="terminal" href="/cli/skills">
-    List, reset, and manage skills from the command line.
-  </Card>
-  <Card title="Built-in Tools" icon="wrench" href="/concepts/tools">
-    See the manage_skill tool reference.
-  </Card>
-</CardGroup>
+You have three supported paths:
+
+1. edit files directly in `~/.operator/skills/`
+2. use the `manage_skill` tool in a live agent run
+3. restore bundled skills with `operator skills reset`
+
+The CLI does **not** create or update arbitrary skills. It only lists skills and resets bundled ones.
+
+## Path Guidance
+
+Use `$OPERATOR_HOME`, not `~/.operator`, inside skill instructions and scripts.
+
+```text
+$OPERATOR_HOME/skills/my-skill/scripts/run.py
+```
+
+That works in shell and non-shell contexts.
+
+## Related Docs
+
+- [Built-in Tools](/concepts/tools)
+- [Skills CLI](/cli/skills)
+- [Configuration](/configuration)

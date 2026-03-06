@@ -1,47 +1,71 @@
 ---
 title: "Skills"
-description: "List and manage skills from the CLI"
+description: "List skills and reset bundled skills"
 ---
 
-## List Skills
+The CLI skill commands are intentionally narrow.
+
+## Commands
 
 ```sh
-operator skills              # list all discovered skills
-operator skills list         # same as above
+operator skills
+operator skills list
+operator skills reset <name>
+operator skills reset --all
 ```
 
-Shows each skill's name, description, and environment variable status (`ok`, `missing: VAR_NAME`, or `-` if none required).
+The CLI does **not** create or edit arbitrary skills. Use the filesystem or the `manage_skill` tool for that.
 
-## Reset Bundled Skills
-
-Operator ships with bundled skills that are installed on `operator init`. If you edit or delete a bundled skill and want to restore the original:
+## `skills` / `skills list`
 
 ```sh
-operator skills reset <name>    # reset a specific bundled skill
-operator skills reset --all     # reset all bundled skills
+operator skills
+operator skills list
 ```
 
-Running `reset` without arguments shows the available bundled skills:
+Shows:
+
+- skill name
+- description
+- env status:
+  - `ok`
+  - `missing: ...`
+  - `-`
+
+This is the fastest way to confirm that a skill is discoverable and whether its required environment variables are present.
+
+## `skills reset`
 
 ```sh
-operator skills reset
-# Available bundled skills:
-#
-#   job-creator
-#   skill-creator
-#
-# Usage: operator skills reset <name> or --all
+operator skills reset skill-creator
+operator skills reset --all
 ```
+
+This only applies to bundled skills shipped with Operator.
+
+Behavior:
+
+- deletes the local bundled skill directory
+- copies the original packaged version back in place
+
+If you run `operator skills reset` with no arguments, the CLI prints the available bundled skill names and usage help.
 
 <Warning>
-  Reset **replaces** the skill directory entirely. Any local edits to the skill will be lost.
+  Resetting a bundled skill discards local edits in that skill directory.
 </Warning>
 
 ## Bundled Skills
 
-| Skill | Description |
-|-------|-------------|
-| `job-creator` | Teaches agents how to create and manage scheduled jobs using `manage_job`. |
-| `skill-creator` | Teaches agents how to create and manage skills following the agentskills.io spec. |
+Current bundled skills:
 
-Bundled skills are automatically installed to `~/.operator/skills/` on startup when missing. On upgrades, new bundled skills are added without touching existing ones.
+| Skill | Purpose |
+| --- | --- |
+| `job-creator` | helps agents create and update jobs correctly |
+| `skill-creator` | helps agents create and refine skills correctly |
+
+Missing bundled skills are also auto-installed during `operator init` and runtime startup.
+
+## Related Docs
+
+- [Skills](/concepts/skills)
+- [Built-in Tools](/concepts/tools)

@@ -1,9 +1,9 @@
 ---
 title: "Memories CLI"
-description: "Inspect active memories, retention, expiry, and recall health from the command line"
+description: "Inspect stored memories, scope counts, expiry, and pinned state"
 ---
 
-Use the memory CLI to inspect what is currently active in the store and to debug why a memory is or is not being recalled.
+The memories CLI is read-only inspection.
 
 ## Commands
 
@@ -12,11 +12,13 @@ operator memories [--scope/-s SCOPE] [--scope-id/-i ID] [--pinned] [--limit/-n N
 operator memories stats
 ```
 
-## List memories
+These commands read the SQLite store directly and work even when runtime memory services are currently disabled.
+
+## `operator memories`
 
 ```sh
 operator memories
-operator memories --scope agent --scope-id researcher
+operator memories --scope agent --scope-id operator
 operator memories --scope global --scope-id global --pinned
 ```
 
@@ -24,80 +26,58 @@ Options:
 
 | Option | Meaning |
 | --- | --- |
-| `--scope`, `-s` | Filter to `user`, `agent`, or `global` |
-| `--scope-id`, `-i` | Filter to a specific scope ID, such as `researcher` or `global` |
-| `--pinned` | Show only pinned memories |
-| `--limit`, `-n` | Maximum rows to display |
+| `--scope`, `-s` | `user`, `agent`, or `global` |
+| `--scope-id`, `-i` | specific scope identifier |
+| `--pinned` | only show pinned memories |
+| `--limit`, `-n` | max rows, default `50` |
 
-Example output:
+Displayed columns:
 
-```text
-ID ┃ Scope            ┃ Retention ┃ Expires              ┃ Content                                 ┃
-━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━
- 7 │ agent/researcher │ durable   │                      │ Use Slack thread replies for summaries │ ⚑
- 8 │ agent/researcher │ candidate │ 2026-03-20T17:22:14Z │ Release checklist is active this week  │
-```
+- `ID`
+- `Scope`
+- `Retention`
+- `Expires`
+- `Content`
+- pin marker
 
-What to look for:
+Expired candidate memories do not appear in the active listing.
 
-- `Retention` tells you whether a memory is `candidate` or `durable`
-- `Expires` is only populated for active candidate memories
-- `⚑` marks pinned memories
-- expired candidate memories will not appear here at all
-
-## Memory stats
+## `operator memories stats`
 
 ```sh
 operator memories stats
 ```
 
-Example output:
+Shows counts per scope:
 
-```text
-Scope             ┃ Count ┃ Candidate ┃ Durable ┃ Pinned
-━━━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━
-agent/researcher │     2 │         1 │       1 │      1
-global/global    │     1 │         0 │       1 │      0
-─────────────────┼───────┼───────────┼─────────┼───────
-Total            │     3 │         1 │       2 │      1
-```
+- total
+- candidate
+- durable
+- pinned
 
-This is the fastest way to answer:
+This is the quickest way to see whether memory growth is concentrated in one agent or scope.
 
-- Do I actually have candidate memories?
-- Are pinned memories accumulating?
-- Which scopes are carrying most of the memory load?
+## Debugging Workflow
 
-## Debugging workflow
+1. Confirm the memory exists:
 
-Use this sequence when memory recall feels wrong:
+   ```sh
+   operator memories --scope agent --scope-id operator
+   ```
 
-1. Run `operator memories` to confirm the memory exists and is still active.
-2. Run `operator memories stats` to see whether you are dealing with mostly `candidate` or `durable` memories.
-3. Tail logs to inspect retrieval and injection behavior:
+2. Check scope-level totals:
 
-```sh
-operator logs -f | rg 'memory recall:|memory injection:'
-```
+   ```sh
+   operator memories stats
+   ```
 
-Example log output:
+3. Inspect live recall logs:
 
-```text
-INFO  [researcher:abc123] memory recall: requested_top_k=3 raw_matches=4 filtered_matches=2 returned=2 min_relevance=0.300
-INFO  [researcher:abc123] memory injection: injected=2 retention_mix=candidate=1 durable=1
-```
+   ```sh
+   operator logs -f | rg 'memory recall:|memory injection:'
+   ```
 
-Interpretation:
-
-- `raw_matches` is what vector search returned before relevance filtering
-- `filtered_matches` survived `memory.inject_min_relevance`
-- `returned` is the post-filter count actually handed back to the runtime
-- `injected` is what was added to the request context
-- `retention_mix` shows whether recall is being dominated by short-lived or durable memory
-
-If `raw_matches` is high but `filtered_matches` is low, your relevance threshold is probably aggressive. If `returned` is lower than expected, reduce `inject_min_relevance` or increase `inject_top_k`.
-
-## Related docs
+## Related Docs
 
 - [Memory](/concepts/memory)
 - [Configuration](/configuration#memory)

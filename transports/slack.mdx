@@ -1,21 +1,33 @@
 ---
 title: "Slack"
-description: "Connect agents to Slack workspaces"
+description: "Slack app setup, runtime behavior, commands, and transport tools"
 ---
 
-Operator connects to Slack using [Socket Mode](https://api.slack.com/apis/socket-mode), which means no public URL or webhook is needed.
+Operator uses Slack Socket Mode. You do not need a public webhook URL.
 
-## Setup
+## Scan First
 
-### 1. Create a Slack App
+- Supported inbound patterns: DMs and `@mentions` in invited channels
+- Supported files: inline images up to 5 MB, all other files saved locally up to 50 MB
+- The runtime uses your configured timezone when formatting Slack timestamps
+- Slack adds transport tools like `list_channels`, `read_channel`, and `read_thread`
+- In-chat commands start with `!` and bypass the LLM
 
-1. Go to [api.slack.com/apps](https://api.slack.com/apps) and create a new app
-2. Enable **Socket Mode** under Settings
-3. Generate an **App-Level Token** with `connections:write` scope — this is your `app_token`
+## Slack App Setup
 
-### 2. Configure Bot Token Scopes
+### 1. Create the app
 
-Under **OAuth & Permissions**, add these bot token scopes:
+Create a Slack app and enable **Socket Mode**.
+
+Create an app-level token with:
+
+- `connections:write`
+
+That becomes your `SLACK_APP_TOKEN`.
+
+### 2. Add bot scopes
+
+Under **OAuth & Permissions**, add:
 
 - `app_mentions:read`
 - `channels:history`
@@ -30,29 +42,34 @@ Under **OAuth & Permissions**, add these bot token scopes:
 - `im:write`
 - `users:read`
 
-### 3. Subscribe to Events
+### 3. Subscribe to events
 
-Under **Event Subscriptions**, subscribe to:
+Subscribe to:
 
 - `app_mention`
 - `message.im`
 
-`message.im` is required for DM handling. Channel mentions are handled via `app_mention`, so `message.channels` and `message.groups` are optional.
+That covers:
 
-### 4. Install to Workspace
+- DMs
+- channel mentions
 
-Install the app to your workspace and copy the **Bot User OAuth Token** — this is your `bot_token`.
+### 4. Install the app
+
+Install the app to your workspace and copy the bot token:
+
+- `SLACK_BOT_TOKEN`
 
 ### 5. Configure Operator
 
-Add your tokens to `~/.operator/.env`:
+Add the tokens to `~/.operator/.env`:
 
 ```sh
 SLACK_BOT_TOKEN=xoxb-...
 SLACK_APP_TOKEN=xapp-...
 ```
 
-Configure the transport in `operator.yaml`:
+Then configure the agent transport:
 
 ```yaml
 agents:
@@ -63,51 +80,92 @@ agents:
       app_token_env: SLACK_APP_TOKEN
 ```
 
-## File Support
+## What The Runtime Handles
 
-Users can upload files directly in Slack messages. Operator handles them based on type:
+SlackTransport accepts:
 
-- **Images** (PNG, JPEG, GIF, WebP up to 5 MB) are inlined as base64 and sent directly to the model as vision input.
-- **All other files** (PDFs, documents, audio, etc.) are saved to `workspace/uploads/` where the agent can access them with `read_file` or `run_shell`.
-- Files larger than 50 MB are skipped.
+- DMs from human users
+- `@mentions` in channels where the bot is invited
 
-The agent can send files back using the `send_file` tool, which uploads a file from the workspace to the current thread.
+It ignores:
 
-<Note>The `files:read` and `files:write` bot token scopes are required for file support. See the setup section above.</Note>
+- bot-authored messages
+- most Slack system/edit subtypes
 
-## Transport Tools
+## Channel and Thread Context
 
-When an agent uses the Slack transport, these tools are automatically available:
+Slack runtime behavior includes:
 
-| Tool | Description |
-|------|-------------|
-| `list_channels` | List channels the bot can see, with IDs and topics |
-| `read_channel` | Fetch recent messages from any channel (up to 100) |
-| `read_thread` | Fetch messages from a specific thread by timestamp |
+- resolving user IDs to human names
+- resolving channel IDs to `#channel-name`
+- formatting Slack timestamps in your configured timezone
+- exposing channel-reading tools to the agent
 
-These tools let the agent actively look up context beyond the current thread — for example, checking what was discussed in a channel before responding, or reading a thread that was referenced in conversation.
+When the agent is first mentioned inside an existing thread, Operator may inject a one-time snapshot of earlier replies in that thread so the model has context it missed before being added.
 
-## Conversation Routing
+## In-Chat Commands
 
-Slack conversations use canonical IDs:
+Commands bypass the LLM and are handled directly by the runtime.
 
+| Command | Behavior |
+| --- | --- |
+| `!help` | list available commands |
+| `!stop` | cancel the active request in the current conversation |
+| `!restart` | returns a message telling you to use the CLI |
+| `!agents` | list configured agents |
+| `!jobs` | list jobs |
+| `!jobs <name>` | show one job's details |
+| `!skills` | list discovered skills |
+| `!memories` | list pinned agent/global memories |
+
+There is currently **no** `!config` command.
+
+## Conversation Behavior
+
+Slack conversation IDs are built from:
+
+```text
+slack:<agent-name>:<channel-id>:<root-thread-ts>
 ```
-slack:{agent_name}:{channel_id}:{root_ts}
+
+If a second message arrives while the same conversation is still busy, Operator replies:
+
+```text
+Still processing a request. Send `!stop` to cancel it.
 ```
 
-Where `root_ts` is `thread_ts` for threaded replies or `ts` for top-level posts. The runtime stores `platform_message_id → conversation_id` mappings so replies to proactive job messages continue in the correct history.
+## Slack Transport Tools
 
-## Commands
+These tools exist only during live Slack-backed runs:
 
-Messages starting with `!` bypass the LLM and are handled directly:
+| Tool | Use it for |
+| --- | --- |
+| `list_channels()` | list postable channels, IDs, and cached topic/purpose snippets |
+| `read_channel(channel, count=20)` | fetch recent channel messages |
+| `read_thread(channel, thread_id, count=50)` | fetch thread replies |
 
-| Command | Description |
-|---------|-------------|
-| `!help` | List all available commands |
-| `!stop` | Cancel the active request in the current conversation |
-| `!restart` | Directs to CLI (disabled in chat) |
-| `!config` | Show resolved configuration as JSON |
-| `!agents` | List configured agents |
-| `!jobs [name]` | List all jobs, or show details for a specific job |
-| `!skills` | List discovered skills with env status |
-| `!memories` | List pinned memories (agent and global scopes) |
+`send_message` also accepts Slack channel names like `#general` or raw channel IDs.
+
+## File Handling
+
+Inbound Slack files behave like this:
+
+| File type | Runtime behavior |
+| --- | --- |
+| image/png, image/jpeg, image/gif, image/webp up to 5 MB | inlined into the model request as an image block |
+| other file types up to 50 MB | saved under `workspace/uploads/` and described in text |
+| larger than 50 MB | skipped |
+
+Additional details:
+
+- duplicate filenames get suffixed (`file_1.txt`, etc.)
+- unsafe filenames are sanitized to a basename
+- saved files can be read later with workspace tools
+
+Outbound uploads use `send_file`, which calls Slack `files.upload_v2`.
+
+## Related Docs
+
+- [Quickstart](/quickstart)
+- [Built-in Tools](/concepts/tools)
+- [Agents](/concepts/agents)

@@ -5,140 +5,141 @@ description: "Release history for Operator"
 
 ## Unreleased
 
-## 0.6.0
+## 0.6.0 · 2026-03-06
 
 ### Added
 
-- **Guided setup onboarding** — `operator setup` now walks through provider selection, timezone detection, Slack credentials, and first-admin creation. Use `operator setup --run` to start the runtime immediately after onboarding.
-- **`python -m operator_ai` entrypoint** — you can now run Operator via the Python module entrypoint when the `operator` script is not yet on your `PATH`.
-- **Simple `thinking` config** — agents now support `thinking: off|low|medium|high` at the defaults and per-agent level. Operator maps this to LiteLLM `reasoning_effort` for supported reasoning models.
-- **Memory retention classes** — memories can now be stored as `candidate` or `durable`, with `memory.candidate_ttl_days` controlling automatic expiry for candidate memories.
+- Guided onboarding via `operator setup`
+- `python -m operator_ai` entrypoint
+- Simple reasoning control via `thinking: off|low|medium|high`
+- Memory retention classes: `candidate` and `durable`
 
 ### Changed
 
-- Runtime/process config now lives under `runtime` in `operator.yaml`. `timezone`, `env_file`, `show_usage`, and `reject_response` no longer live under `defaults` or `settings`.
-- `runtime.timezone` now drives request-time current-time injection for chats, jobs, and sub-agents. Operator appends a fresh timestamp block to the transient model request only, while keeping the stable system prompt and persisted conversation history unchanged.
-- Jobs and sub-agents now inherit the resolved agent thinking level, runtime prompt, and skill filter more consistently.
-- Memory recall is stricter about scope and retention. Public contexts no longer expose user-scoped memories, and private contexts only expose the current user's memories.
-- The memory schema now stores retention and expiry metadata. Upgrading to 0.6.0 resets legacy memory tables on first run because there is no in-place migration path yet.
-- Harvester and cleaner prompts are stricter about rejecting short-lived conversational noise and preserving retention metadata.
+- Runtime/process settings now live under `runtime` in `operator.yaml`
+- Current time is injected just in time for live model requests instead of being stored in history
+- Jobs and sub-agents inherit resolved agent thinking, runtime prompt, and skill filter more consistently
+- Memory recall is stricter about scope and retention
+- Legacy memory tables reset on first run of this release to support retention and expiry metadata
+- Harvester and cleaner prompts are stricter about short-lived conversational noise
 
 ### Fixed
 
-- `run_skill` now expands environment variable references in skill arguments after env sanitization, while still preserving `$OPERATOR_HOME`.
-- Cross-provider fallback now drops preserved reasoning metadata before each model call so retries remain safe when moving between reasoning-capable and non-capable models.
-- Config loading now fails through `ConfigError` internally and is converted at CLI/runtime boundaries, avoiding hard `SystemExit` behavior in library-style callers.
-- Slack thread timestamps now render in the configured runtime timezone.
-- Same-agent `spawn_agent(...)` calls now inherit the current agent's full prompt/runtime context even when no explicit `agent=` override is provided.
+- `run_skill` expands env var references after env sanitization while preserving `$OPERATOR_HOME`
+- Cross-provider fallbacks drop reasoning metadata before each model call
+- Config loading raises `ConfigError` internally instead of terminating via `SystemExit`
+- Slack thread timestamps render in the configured runtime timezone
+- Same-agent `spawn_agent(...)` once again inherits the current agent's full prompt/runtime context
 
-## 0.5.1
+## 0.5.1 · 2026-03-05
 
 ### Fixed
 
-- Cleaner error handling when a tool references a missing command during execution.
-- Service definitions now embed the current shell's `PATH`, so tools installed via Homebrew, pyenv, nvm, etc. are available under launchd/systemd without extra configuration.
-- Replaced `LOGIN_SHELL` subprocess wrapping with `.env`-based PATH resolution for simpler, more reliable environment setup.
-
-## 0.5.0
-
-### Added
-
-- **Agent frontmatter** — `AGENT.md` files now support optional YAML frontmatter with `name` and `description`. Agents with descriptions are automatically listed in each other's system prompts for inter-agent awareness.
-- **Cross-agent spawning** — `spawn_agent` accepts an optional `agent` parameter to delegate tasks to a different agent with its own prompt, models, workspace, sandbox, and permissions.
-- **Spawn logging** — every `spawn_agent` call is logged with the parent agent, target agent, and nesting depth for traceability.
+- `operator service install` now embeds the current interactive `PATH` so background services can find pyenv/nvm/Homebrew tools
+- Cleaner error output for simple `FileNotFoundError` cases
 
 ### Changed
 
-- `AGENT.md` frontmatter is stripped before prompt injection — the LLM only sees the markdown body.
-- `operator agents` CLI now shows a Description column from agent frontmatter.
-- Sub-agent sandbox and permissions inheritance now respects the target agent's config when spawning a different agent.
+- `.env` uses `setdefault` semantics: exported shell env vars win
+- `operator init` writes API-key placeholders only; PATH is handled by the service definition
 
-## 0.4.1
+## 0.5.0 · 2026-03-05
 
 ### Added
 
-- **`OPERATOR_HOME` env var** — the resolved Operator base directory is now exposed as `$OPERATOR_HOME` in all shell commands, skill scripts, and job hooks. Use it instead of `~/.operator` for reliable path resolution in non-shell contexts.
-- **`job-creator` bundled skill** — teaches agents how to create and manage scheduled jobs using `manage_job`, covering JOB.md anatomy, cron schedules, prompt patterns, KV state, hooks, and the `send_message` delivery rule.
-- **Prompts extracted to files** — system, agent, job, and subagent prompts moved from inline strings to `.md` files under `prompts/`, loaded via `load_prompt()`.
+- Agent frontmatter with `name` and `description`
+- Cross-agent spawning via `spawn_agent(agent="...")`
+- Spawn logging with parent, target, and depth
+- `$OPERATOR_HOME` in shell commands, skill scripts, and job hooks
+- `job-creator` bundled skill
+- Prompt templates extracted to `.md` files under `prompts/`
 
 ### Changed
 
+- `AGENT.md` frontmatter is stripped before prompt injection
+- `operator agents` shows frontmatter descriptions
+- Cross-agent sub-runs respect the target agent's sandbox and permissions
 - System prompt trimmed and reworded for clarity
-- `$OPERATOR_HOME` path documented in agent context and job context prompts
-
-## 0.4.0
-
-### Added
-
-- **Users, roles, and auth** — every inbound message is authenticated against a user database with role-based agent access control
-- **Agent permissions** — flat allow-lists for [tools and skills](/concepts/agents#permissions) per agent
-- **Skill access tools** — [`read_skill` and `run_skill`](/concepts/tools#skill-access) let restricted agents use skills without shell access
-- **Agent sandbox** — [`sandbox`](/concepts/agents#sandbox) config flag confines file tools to the workspace (default) or grants full filesystem access
-- **File support** — users can upload images, PDFs, and documents in Slack; images are sent to the model as vision input, other files are saved to `workspace/uploads/`
-- **`send_file` tool** — agents can upload files back to chat
-- **`operator job run`** — run jobs from the CLI with dedicated transport and logging
-- **`manage_users` tool** — admin-only runtime user management
 
 ### Fixed
 
-- `send_message` and `send_file` default to the current conversation's channel and thread
-- Hook scripts respect shebang interpreter
-- Skill script paths expanded correctly for `run_skill`
+- `!stop` cancels the active task immediately
+- Incomplete tool-call history is trimmed on cancel/load
+- Cancel state is cleared after a stopped run
+
+## 0.4.0 · 2026-03-05
+
+### Added
+
+- Users, roles, and transport-message auth
+- Agent permissions for tools and skills
+- Skill access tools: `read_skill` and `run_skill`
+- Agent sandboxing for file tools
+- Slack file/media support
+- `send_file`
+- `operator job run`
+- `manage_users` admin-only tool
+
+### Fixed
+
+- `send_message` and `send_file` default to the current conversation channel/thread
+- Hook scripts respect their shebang interpreter
+- Skill script paths expand correctly in `run_skill`
 - `manage_skill list` respects agent skill permissions
+- Login shell PATH handling replaced with more reliable env-file/service behavior
 
-## 0.3.0
+## 0.3.0 · 2026-03-04
 
 ### Added
 
-- **Agent permissions** — flat allow-lists for tools and skills per agent
-- **Shared directory** — `~/.operator/shared/` is symlinked into every agent workspace for cross-agent file sharing
-- **Bundled skills** — skills shipped with the package, auto-installed on `operator init`
-- **`manage_skill` tool** — agents can create, update, and delete skills at runtime
-- **`operator skills reset`** — CLI command to restore bundled skills to their original version
-- **Transport-scoped read tools** — Slack transport adds `list_channels`, `read_channel`, and `read_thread`
-- **Timezone config** — added IANA timezone support for scheduling and prompt behavior (configured via `runtime.timezone` in current releases)
+- Agent permission system
+- Shared directory symlinked into all workspaces
+- Bundled skills installed on `operator init`
+- `manage_skill`
+- `operator skills reset`
+- Slack transport read tools: `read_channel` and `read_thread`
+- Configurable timezone support
 
 ### Fixed
 
-- Default agent renamed from `hermy`/`default` to `operator`
+- Default agent renamed to `operator`
 
-## 0.2.2
+## 0.2.2 · 2026-03-04
+
+### Added
+
+- Per-run ID logging
+- Cache write token reporting in the usage line
 
 ### Fixed
 
-- **Prompt caching** — system prompt is split into a stable prefix and dynamic suffix with Anthropic cache breakpoints so the prefix is reused across turns
-- Rolling cache breakpoint on conversation history (penultimate user message) for multi-turn token savings
-- Read OpenAI `cached_tokens` from `prompt_tokens_details` for unified cache reporting
+- Anthropic prompt caching with a stable/dynamic prompt split
+- Rolling cache breakpoint on conversation history
+- Unified OpenAI cached-token reporting
+
+## 0.2.1 · 2026-03-04
 
 ### Added
 
-- Per-run ID logging via ContextVar for tracing agent runs in logs
-- Usage line now shows cache write tokens, prefixed with `Usage:`
+- Per-job `model` override in `JOB.md`
 
-## 0.2.1
-
-### Added
-
-- Per-job model override via `model` field in [JOB.md frontmatter](/concepts/jobs#model-override)
-
-## 0.2.0
+## 0.2.0 · 2026-03-04
 
 ### Added
 
-- [`operator init`](/cli/overview#setup) command to scaffold `~/.operator/` with starter config and agent
+- `operator init` scaffolding command
 
-## 0.1.0
+### Fixed
+
+- PyPI publish workflow token handling
+
+## 0.1.0 · 2026-03-04
 
 ### Added
 
 - Initial public beta release
-- LiteLLM-backed agent with model fallback chains
-- Slack transport with Socket Mode and thread continuity
-- SQLite persistence with WAL mode
-- Scheduled jobs with cron, prerun gating, and postrun hooks
-- Vector memory with harvesting and semantic search
-- Key-value store with TTL support
-- Built-in tools (shell, file, web, memory, KV, jobs, messaging, sub-agents) plus transport-specific tools
-- Skills discovery from markdown files
-- Turn-safe context truncation
-- CLI for inspection, service management, and job control
+- LiteLLM-backed agent runtime
+- SQLite persistence
+- Background job scheduler
+- Managed service lifecycle
+- Built-in tool surface for shell, files, web, memory, and more

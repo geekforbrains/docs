@@ -1,31 +1,107 @@
 ---
 title: "Service"
-description: "Run Operator as a background service"
+description: "Install and manage Operator as a background service"
 ---
 
-Operator can run as a background service using launchd (macOS) or systemd (Linux).
+Operator supports:
+
+- `launchd` on macOS
+- `systemd --user` on Linux
+
+## Commands
 
 ```sh
-operator service install       # install or refresh the service definition
-operator service uninstall     # unload and remove the service definition
-operator service start         # start the background service
-operator service stop          # stop the background service
-operator service restart       # restart the background service
-operator service status        # show whether the service is running
+operator service install
+operator service uninstall
+operator service start
+operator service stop
+operator service restart
+operator service status
 ```
 
-## PATH Capture
+## `install`
 
-`service install` captures your current shell's `PATH` and embeds it in the service definition. This means tools installed via Homebrew, pyenv, nvm, etc. are available to your agents even when running under launchd/systemd. If you install new tools, re-run `operator service install` to update the PATH.
+```sh
+operator service install
+```
+
+Behavior:
+
+- captures your current shell `PATH`
+- writes the service definition
+- ensures logs go to `~/.operator/logs/operator.log`
+
+Platform details:
+
+- macOS: unload existing plist if present, write `~/Library/LaunchAgents/ai.operator.plist`, then load it
+- Linux: write `~/.config/systemd/user/operator.service`, run `daemon-reload`, and enable the unit
+
+<Note>
+  On Linux, `install` enables the unit but does not start it. Run `operator service start` after installation.
+</Note>
+
+## `uninstall`
+
+```sh
+operator service uninstall
+```
+
+Platform details:
+
+- macOS: unloads and removes the plist if present
+- Linux: disables and stops the unit, removes the unit file, and reloads the user daemon
+
+## `start`, `stop`, `restart`, `status`
+
+```sh
+operator service start
+operator service stop
+operator service restart
+operator service status
+```
+
+These proxy to:
+
+- `launchctl` on macOS
+- `systemctl --user` on Linux
+
+`status` exits non-zero when the service is not running or not loaded.
 
 ## Installed Files
 
-- macOS: `~/Library/LaunchAgents/ai.operator.plist`
-- Linux: `~/.config/systemd/user/operator.service`
+| Platform | Path |
+| --- | --- |
+| macOS | `~/Library/LaunchAgents/ai.operator.plist` |
+| Linux | `~/.config/systemd/user/operator.service` |
 
-Both service definitions write stdout/stderr to `~/.operator/logs/operator.log`.
+## Why PATH Capture Matters
 
-## Platform Behavior
+The service definition embeds your current `PATH` so agents can find tools installed via:
 
-- macOS: `operator service install` unloads any existing plist, writes the new one, and loads it with launchd.
-- Linux: `operator service install` writes the user unit and enables it with systemd. Use `operator service start` to start it immediately.
+- Homebrew
+- pyenv
+- nvm
+- uv-installed shims
+- local package managers
+
+If you install new tools later, re-run:
+
+```sh
+operator service install
+```
+
+## Logs
+
+Both stdout and stderr go to:
+
+```text
+~/.operator/logs/operator.log
+```
+
+Use:
+
+```sh
+operator logs -f
+```
+
+to watch the service in real time.

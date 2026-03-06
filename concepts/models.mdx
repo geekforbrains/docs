@@ -1,32 +1,36 @@
 ---
 title: "Models & Thinking"
-description: "Fallback chains, reasoning levels, and model-selection behavior"
+description: "Fallback chains, reasoning levels, max tokens, and inheritance"
 ---
 
-Operator uses [LiteLLM model identifiers](https://docs.litellm.ai/docs/providers) in `provider/model-name` format:
+Operator uses LiteLLM model IDs like `anthropic/claude-sonnet-4-6` or `openai/gpt-4.1`.
+
+## Scan First
+
+- `models:` is a fallback chain, not a single preferred value.
+- Fallback happens on every live model call.
+- `thinking:` is `off|low|medium|high`.
+- Jobs inherit `thinking`, `context_ratio`, and `max_output_tokens` from the resolved agent.
+- Jobs may override `model` and `max_iterations`, but not `thinking`.
+
+## Fallback Chains
 
 ```yaml
 defaults:
   models:
-    - "anthropic/claude-opus-4-6"
+    - "anthropic/claude-sonnet-4-6"
     - "openai/gpt-4.1"
 ```
 
-## Fallback Chains
+Behavior:
 
-`models` is a fallback chain.
+1. Operator tries the first model.
+2. If the call errors, it retries the same request with the next model.
+3. If a later model succeeds, the run continues normally.
 
-- The first model is the preferred model.
-- If that call errors, Operator retries the same request with the next model in the list.
-- This check happens on every live model call, not just once per conversation.
-
-When a fallback succeeds, Operator logs that recovery so you can see which model actually answered.
-
-<Tip>If you want automatic fallback for jobs, leave `model` unset in `JOB.md` and configure the fallback chain on the agent instead.</Tip>
+Fallback is evaluated per live call, not per conversation. A long conversation may use different models on different turns if failures occur.
 
 ## Thinking Levels
-
-Operator exposes a simple public `thinking` setting instead of provider-specific reasoning budgets:
 
 ```yaml
 defaults:
@@ -35,18 +39,8 @@ defaults:
 agents:
   researcher:
     models:
-      - "anthropic/claude-sonnet-4-6"
-    thinking: high
-
-  planner:
-    models:
       - "openai/o3"
-    thinking: medium
-
-  fast-bot:
-    models:
-      - "gemini/gemini-2.5-flash"
-    thinking: low
+    thinking: high
 ```
 
 Supported values:
@@ -56,60 +50,65 @@ Supported values:
 - `medium`
 - `high`
 
-Internally, Operator maps these to LiteLLM `reasoning_effort`:
+Operator maps these to LiteLLM `reasoning_effort` when the current model supports it:
 
-| Operator value | LiteLLM param |
-|---------------|---------------|
+| Operator | LiteLLM |
+| --- | --- |
 | `off` | `reasoning_effort="none"` |
 | `low` | `reasoning_effort="low"` |
 | `medium` | `reasoning_effort="medium"` |
 | `high` | `reasoning_effort="high"` |
 
-## Capability Handling
+If the current model does not support `reasoning_effort`, Operator omits the parameter and continues.
 
-Reasoning control is resolved against the concrete model being called, not just the provider name.
+## Cross-Provider Safety
 
-- If the selected model supports `reasoning_effort`, Operator sends it.
-- If the selected model does not support it, Operator omits the param and continues normally.
-- If a fallback chain moves from a thinking-capable model to a non-capable model, the retry still works.
-
-Operator also strips preserved reasoning metadata from assistant history before each model call so cross-provider fallback does not break on provider-specific response fields.
+When a response includes provider-specific reasoning metadata, Operator strips that metadata from assistant history before the next model call. This is what keeps Anthropic-to-OpenAI or OpenAI-to-other-provider fallbacks from breaking on incompatible history payloads.
 
 ## Inheritance Rules
 
-`thinking` is available in:
+| Execution type | Models | Thinking | Other execution settings |
+| --- | --- | --- | --- |
+| Chat | agent override or `defaults.models` | agent override or `defaults.thinking` | `max_iterations`, `context_ratio`, `max_output_tokens` resolve the same way |
+| `spawn_agent()` without `agent=` | inherit current run context | inherit current run context | inherit current run context |
+| `spawn_agent(agent="other")` | switch to target agent | switch to target agent | switch to target agent |
+| Scheduled job | `job.model` or resolved agent models | resolved agent thinking | resolved agent `context_ratio` and `max_output_tokens` |
 
-- `defaults.thinking`
-- `agents.<name>.thinking`
+## Jobs
 
-It is not available in job frontmatter.
-
-Behavior by execution type:
-
-- Chat turns use the resolved agent thinking level.
-- `spawn_agent()` without `agent="..."` inherits the calling agent's current thinking level.
-- `spawn_agent(agent="other")` switches to the target agent's configured thinking level.
-- Jobs inherit the selected agent's thinking level, even when the job overrides `model`.
-
-## Job Overrides
-
-Jobs currently support:
+Job frontmatter supports:
 
 - `model`
 - `max_iterations`
 
-They do not support:
+It does **not** support:
 
 - `thinking`
 - `context_ratio`
 - `max_output_tokens`
 
-Those continue to come from the resolved agent/default config.
+If you need a different thinking level for a job, point the job at a different agent.
 
-## Output Limits
+## `max_output_tokens`
 
-`max_output_tokens` still controls `max_tokens` for model calls. When it is `null`, Operator asks LiteLLM for the model's max output size and uses that when available.
+`max_output_tokens` sets LiteLLM `max_tokens` for each call.
 
-This existing `max_tokens` behavior is preserved for reasoning-capable models too.
+- if configured: Operator uses your explicit value
+- if `null`: Operator asks LiteLLM for the model's max output size and uses that when available
+- if LiteLLM cannot resolve a max: the param is omitted
 
-See [Configuration](/configuration) for the full config schema and [Agents](/concepts/agents) for inheritance behavior across sub-agents.
+## `context_ratio`
+
+`context_ratio` controls how aggressively Operator trims stored history before each model call.
+
+- higher values keep more history
+- lower values reduce token usage
+- `0.0` disables trimming logic and sends the full stored history
+
+The system prompt and latest user exchange are preserved first; older exchanges are the first thing dropped.
+
+## Related Docs
+
+- [Configuration](/configuration)
+- [Agents](/concepts/agents)
+- [Jobs](/concepts/jobs)

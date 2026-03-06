@@ -1,33 +1,128 @@
 ---
 title: "Users"
-description: "Manage users, identities, and roles"
+description: "Manage users, identities, and roles from the CLI"
 ---
+
+## Commands
 
 ```sh
 operator user add <username> --role <role> <transport> <external_id>
-operator user remove <username>
 operator user link <username> <transport> <external_id>
 operator user unlink <username> <transport> <external_id>
+operator user remove <username>
 operator user list
 operator user info <username>
 operator user add-role <username> <role>
 operator user remove-role <username> <role>
 ```
 
-## Bootstrap example
-
-Typical first-time setup flow:
+## Bootstrap Example
 
 ```sh
 operator user add gavin --role admin slack U04ABC123
-operator user link gavin telegram 12345678
-operator user add shawn --role team slack U07XYZ789
+operator user add alex --role team slack U07XYZ999
+operator user link gavin slack U08ALT111
+operator user add-role alex reviewer
 operator user list
 ```
 
-## Notes
+## Command Behavior
 
-- `--role` is required on `add` — it creates the user, assigns the role, and links the identity in one command.
-- If the role is not `admin` and is not defined in config, a warning is shown but the user is still created.
-- Usernames must be lowercase alphanumeric (dots and hyphens allowed), 1–64 characters.
-- `remove` cascades — all identities and roles are deleted with the user.
+### `add`
+
+Creates the user, assigns the role, and links the identity in one command.
+
+```sh
+operator user add gavin --role admin slack U04ABC123
+```
+
+Notes:
+
+- `--role` is required
+- usernames must match the runtime username rules
+- if the role is not `admin` and is not defined in config, the command warns but still creates the user
+
+### `link`
+
+Adds another identity to an existing user:
+
+```sh
+operator user link gavin slack U08ALT111
+```
+
+### `unlink`
+
+Removes a single identity mapping:
+
+```sh
+operator user unlink gavin slack U08ALT111
+```
+
+### `remove`
+
+Deletes the user and cascades:
+
+- identities
+- roles
+
+```sh
+operator user remove gavin
+```
+
+### `list`
+
+Shows all users with roles and identities:
+
+```sh
+operator user list
+```
+
+### `info`
+
+Shows one user with:
+
+- username
+- creation time
+- roles
+- identities
+
+```sh
+operator user info gavin
+```
+
+### `add-role` / `remove-role`
+
+```sh
+operator user add-role gavin team
+operator user remove-role gavin team
+```
+
+## Username Rules
+
+Usernames must be:
+
+- lowercase
+- `1-64` characters
+- letters, numbers, dots, or hyphens only
+
+Examples:
+
+- valid: `gavin`, `alex.s`, `team-bot`
+- invalid: `Gavin`, `bad name`, `bad_name`
+
+## Identity Format
+
+The CLI stores identities as `transport:external_id`.
+
+Example:
+
+```text
+slack:U04ABC123
+```
+
+The current runtime transport is Slack, but the database can store other transport prefixes too.
+
+## Related Docs
+
+- [Users & Auth](/concepts/users)
+- [Quickstart](/quickstart)

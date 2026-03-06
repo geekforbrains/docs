@@ -1,158 +1,162 @@
 ---
 title: "Built-in Tools"
-description: "Tools available to all agents"
+description: "The tool surface Operator agents can use at runtime"
 ---
 
-Every agent has access to these built-in tools:
+Operator registers a built-in tool set and may add transport-specific tools at runtime.
 
-## Workspace & Files
+## Scan First
 
-| Tool | Description |
-|------|-------------|
-| `run_shell` | Execute shell commands in the agent's workspace. Optional `timeout` (default 120s). |
-| `read_file` | Read file contents |
-| `write_file` | Write or overwrite a file |
-| `list_files` | List files in a directory. Optional `max_depth` (default 2). |
+- Permissions can hide tools from specific agents.
+- Some tools require runtime context to work correctly.
+- Transport tools only appear for the active transport.
+- `run_shell` is powerful and unaffected by sandboxing.
+- Memory tools need runtime memory to be enabled.
 
-All file paths resolve relative to the agent's workspace at `~/.operator/agents/<name>/workspace/`. By default, paths that escape the workspace are rejected. Set `sandbox: false` on the agent to allow full filesystem access — see [Sandbox](/concepts/agents#sandbox).
+## Tool Availability Rules
+
+There are three separate gates:
+
+1. **Registration:** built-in tools are registered globally
+2. **Permissions:** `permissions.tools` may hide them from an agent
+3. **Runtime context:** some tools still need a transport, memory store, or agent context
+
+Example: `save_memory` is registered, but it returns `memory system not configured` if runtime memory is off.
+
+## Shell and Files
+
+| Tool | Notes |
+| --- | --- |
+| `run_shell(command, timeout=120)` | runs `bash -c` from the agent workspace |
+| `read_file(path)` | reads a file, capped at 1 MB / 16 KB returned output |
+| `write_file(path, content)` | writes a file, creating parent directories |
+| `list_files(path=".", max_depth=2)` | lists non-hidden files and directories |
+
+Important behavior:
+
+- file paths resolve relative to the agent workspace
+- sandboxed agents cannot escape the workspace with file tools
+- unsandboxed agents may use absolute paths or parent traversal
+- `run_shell` is not sandboxed, only rooted at the workspace as `cwd`
 
 ## Web
 
-| Tool | Description |
-|------|-------------|
-| `web_fetch` | Fetch and extract content from a URL. Supports `offset` and `limit` parameters for paginating large content (default limit 16000 chars). |
+| Tool | Notes |
+| --- | --- |
+| `web_fetch(url, offset=0, limit=16000)` | fetches text-friendly content and paginates large responses |
+
+`web_fetch` prefers:
+
+1. a `.md` variant of the URL when available
+2. clean text extraction from HTML
+3. raw text for already textual content
+
+It only returns text-like content. Unsupported binary types return an error string.
 
 ## Messaging
 
-| Tool | Description |
-|------|-------------|
-| `send_message` | Send a message to a channel or thread |
-| `send_file` | Upload a file from the workspace to a channel or thread |
+| Tool | Notes |
+| --- | --- |
+| `send_message(channel="", text="", thread_id="")` | sends a message and returns the platform message ID |
+| `send_file(path, channel="", thread_id="")` | uploads a file and returns the platform message ID when supported |
 
-Both tools default to the current conversation's channel and thread when called without explicit `channel` or `thread_id` parameters. Pass them explicitly to cross-post to a different channel.
+Defaults:
 
-## Sub-agents
+- if `channel` is omitted, use the current conversation channel
+- if `thread_id` is omitted, use the current conversation thread
 
-| Tool | Description |
-|------|-------------|
-| `spawn_agent` | Spawn a sub-agent to handle a focused sub-task |
+`send_file` uses the same path-resolution and sandbox rules as file tools and rejects files over 50 MB.
 
-### `spawn_agent`
+## Sub-Agents
 
-Spawns a sub-agent that gets its own conversation and runs to completion. Returns the sub-agent's final response.
+| Tool | Notes |
+| --- | --- |
+| `spawn_agent(task, context="", agent="")` | creates a focused child run and returns its final answer |
 
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `task` | Yes | Clear description of what the sub-agent should accomplish. |
-| `context` | No | Additional context or data for the sub-agent. |
-| `agent` | No | Name of a different agent to spawn. Uses that agent's prompt, models, thinking level, workspace, sandbox, and permissions. If omitted, inherits the calling agent's context. |
+Rules:
 
-Sub-agents are capped at 3 levels of nesting. When `agent` is specified, agents need [frontmatter](/concepts/agents#frontmatter) with a `description` to appear in each other's "Available Agents" list.
-
-See [Cross-Agent Spawning](/concepts/agents#cross-agent-spawning) for details.
+- max depth is `3`
+- without `agent=`, the child inherits the current run context
+- with `agent=`, the child switches to that agent's config
 
 ## Memory
 
-| Tool | Description |
-|------|-------------|
-| `save_memory` | Store a memory with scope, retention, and optional pin |
-| `search_memories` | Semantic search across stored memories |
-| `forget_memory` | Delete a specific memory |
-| `list_memories` | List active memories with retention and expiry metadata |
+| Tool | Notes |
+| --- | --- |
+| `save_memory(content, scope="user", retention="durable", pinned=false)` | stores a memory |
+| `search_memories(query, scope="", top_k=5)` | semantic lookup |
+| `forget_memory(memory_id)` | deletes a memory |
+| `list_memories(scope="", limit=50, offset=0)` | lists visible memories |
 
-Example:
-
-```text
-save_memory("Use Slack thread replies for summaries", scope="agent", retention="durable")
-save_memory("Release checklist is active this week", scope="agent", retention="candidate")
-```
+These tools require runtime memory to be active. In public channels, `user` scope is blocked.
 
 ## Key-Value Store
 
-| Tool | Description |
-|------|-------------|
-| `kv_get` | Retrieve a value by key |
-| `kv_set` | Store a value with optional TTL |
-| `kv_delete` | Remove a key |
-| `kv_list` | List keys and values |
+| Tool | Notes |
+| --- | --- |
+| `kv_get(key, namespace="")` | returns a value or `[not found]` |
+| `kv_set(key, value, namespace="", ttl_hours=0)` | stores a value with optional TTL |
+| `kv_delete(key, namespace="")` | deletes a key |
+| `kv_list(namespace="", prefix="")` | lists keys for the current agent |
 
-Keys are scoped by agent name and grouped by namespace. Use namespaces to organize related keys (e.g. by job name). Use TTL to auto-expire tracking data.
+KV data is always scoped to the current agent.
 
-## Job Management
+Use namespaces for grouping operational state like:
 
-| Tool | Description |
-|------|-------------|
-| `manage_job` | Create, update, delete, enable, disable, and list jobs |
+- cursors
+- watermarks
+- job checkpoints
+- dedupe keys
 
-## Skill Management
+## Jobs and Skills
 
-| Tool | Description |
-|------|-------------|
-| `manage_skill` | Create, update, delete, and list skills |
+| Tool | Notes |
+| --- | --- |
+| `manage_job(action, name="", config="")` | list, create, update, delete, enable, disable |
+| `manage_skill(action, name="", config="")` | list, create, update, delete |
+| `read_skill(skill, path="")` | read `SKILL.md`, references, or assets |
+| `run_skill(skill, command, timeout=120)` | execute a skill-related command |
 
-Actions: `list`, `create`, `update`, `delete`. The `config` parameter takes the full `SKILL.md` content (frontmatter + body). Validates the [agentskills.io](https://agentskills.io) spec on create and update — name format, description length, metadata structure, and non-empty body.
+Key behavior:
 
-## Skill Access
-
-These tools let agents interact with skills without needing `run_shell` — useful for restricted agents that still need skill capabilities.
-
-| Tool | Description |
-|------|-------------|
-| `read_skill` | Read skill content (SKILL.md, references, assets) |
-| `run_skill` | Execute a command in the context of a skill |
-
-### `read_skill`
-
-Reads files from a skill's directory. Used for progressive disclosure — the agent reads `SKILL.md` first, then reads specific reference or asset files as needed.
-
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `skill` | Yes | Skill name |
-| `path` | No | Relative path within the skill directory. Defaults to `SKILL.md`. |
-
-Path traversal is blocked — `..` components are rejected. Only skills in the agent's permission list are accessible.
-
-### `run_skill`
-
-Executes a command in the context of a skill. Runs with `shell=False` (no pipes, redirects, or chaining). Skill script paths are auto-expanded.
-
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `skill` | Yes | Skill name |
-| `command` | Yes | Command string (parsed with `shlex`) |
-| `timeout` | No | Timeout in seconds (default 120) |
-
-- `SKILL_DIR` env var is set to the skill's absolute path.
-- Arguments starting with `scripts/`, `references/`, or `assets/` are auto-prefixed with the skill path.
-- Transport tokens and `OPERATOR_*` env vars are stripped from the subprocess environment.
-- Output is capped at 16 KB.
+- `manage_job create/update` expects full `JOB.md` content
+- `manage_skill create/update` expects full `SKILL.md` content
+- `manage_job` validates cron, agent name, and hook path safety
+- `manage_job create` can scaffold placeholder hook scripts
+- `run_skill` uses `shell=False`, strips transport secrets, preserves `$OPERATOR_HOME`, and sets `SKILL_DIR`
 
 ## User Management
 
-| Tool | Description |
-|------|-------------|
-| `manage_users` | Manage users, identities, and roles (admin-only) |
+| Tool | Notes |
+| --- | --- |
+| `manage_users(action, username="", role="", transport="", external_id="")` | runtime user and role management |
 
-### `manage_users`
+`manage_users` is role-gated:
 
-Manage users, identities, and roles. Requires the `admin` role — execution is blocked for non-admin users even if the tool is visible.
+- requires the `admin` role
+- stays visible to the LLM
+- returns an error if the active user is not an admin
 
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `action` | Yes | One of: `list`, `add`, `remove`, `link`, `unlink`, `add_role`, `remove_role` |
-| `username` | No | Target username |
-| `role` | No | Role to add or remove |
-| `transport` | No | Transport name (for link/unlink) |
-| `external_id` | No | External identity (for link/unlink) |
+Its `add` action creates the user and assigns a role. Identity linking is a separate `link` action.
 
 ## Transport Tools
 
-Each transport injects its own tools — only the tools for the active transport are available. For example, an agent connected to Slack gets Slack-specific tools, while a future Discord agent would get Discord-specific tools.
+Transport tools are added at runtime. They do not appear in `operator tools`, which only lists built-in tools.
 
-### Slack
+Slack currently adds:
 
-| Tool | Description |
-|------|-------------|
-| `list_channels` | List available channels with IDs and topics |
-| `read_channel` | Read recent messages from a channel |
-| `read_thread` | Read messages from a specific thread |
+| Tool | Notes |
+| --- | --- |
+| `list_channels()` | show cached postable channels |
+| `read_channel(channel, count=20)` | fetch recent channel messages |
+| `read_thread(channel, thread_id, count=50)` | fetch thread replies |
+
+See [Slack](/transports/slack) for the Slack-specific runtime behavior.
+
+## Choosing The Right Tool
+
+- use **KV** for operational state
+- use **memory** for reusable human/project facts
+- use **jobs** for recurring autonomous workflows
+- use **skills** for reusable instructions and scripts
+- use **sub-agents** when a task benefits from isolation or a different agent persona

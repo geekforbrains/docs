@@ -1,14 +1,84 @@
 ---
 title: "Jobs CLI"
-description: "Manage scheduled jobs from the command line"
+description: "Inspect, enable, disable, and manually run jobs"
 ---
 
+## Commands
+
 ```sh
-operator job list              # all jobs with status, schedule, counters
-operator job info <job-name>   # job config and runtime state
-operator job run <job-name>    # trigger a job immediately (outside cron)
-operator job enable <job-name> # enable a job
-operator job disable <job-name> # disable a job
+operator job list
+operator job info <job-name>
+operator job run <job-name>
+operator job enable <job-name>
+operator job disable <job-name>
 ```
 
-See [Jobs](/concepts/jobs) for details on job format, hooks, and counters.
+The CLI is for inspection and control. Creating, updating, and deleting jobs is done by editing `JOB.md` files directly or via the runtime `manage_job` tool.
+
+## `list`
+
+```sh
+operator job list
+```
+
+Shows one row per job with:
+
+- enabled/disabled state
+- schedule
+- last run
+- last result
+- run/error/gate/skip counters
+
+## `info`
+
+```sh
+operator job info daily-summary
+```
+
+Shows:
+
+- frontmatter fields like name, schedule, enabled state, description, and path
+- runtime state like `last_run`, `last_result`, duration, errors, and counters
+
+## `run`
+
+```sh
+operator job run daily-summary
+```
+
+This command:
+
+- ignores the cron schedule
+- runs immediately
+- works even if the job is disabled
+- uses a CLI transport instead of Slack
+
+That last point matters: any `send_message` call made by the job is printed to your terminal rather than posted to Slack.
+
+## `enable` / `disable`
+
+```sh
+operator job enable daily-summary
+operator job disable daily-summary
+```
+
+These commands rewrite the `enabled:` field in the job's YAML frontmatter.
+
+You may target:
+
+- the job directory name, when it matches
+- or the frontmatter `name`, if different
+
+## Typical Workflow
+
+```sh
+operator job list
+operator job info daily-summary
+operator job run daily-summary
+operator job disable daily-summary
+```
+
+## Related Docs
+
+- [Jobs](/concepts/jobs)
+- [Built-in Tools](/concepts/tools)

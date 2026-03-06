@@ -1,206 +1,175 @@
 ---
 title: "Agents"
-description: "Define agent personalities and capabilities with markdown files"
+description: "Prompt files, workspaces, sandboxing, delegation, and prompt assembly"
 ---
 
-Each agent is defined by a markdown file at `~/.operator/agents/<name>/AGENT.md`. The file supports optional YAML frontmatter for metadata and a markdown body that becomes the agent's prompt.
+Each agent lives at `~/.operator/agents/<name>/AGENT.md` and gets its own workspace at `~/.operator/agents/<name>/workspace/`.
 
-## Creating an Agent
+## Scan First
 
-Create a directory and prompt file:
+- `AGENT.md` may include optional YAML frontmatter.
+- The markdown body becomes the agent prompt.
+- Agents inherit models and execution settings from `defaults` unless overridden.
+- `sandbox: true` only affects file tools, not `run_shell`.
+- Agents without a transport are headless: usable for jobs and `spawn_agent(...)`, not direct chat.
 
-```sh
-mkdir -p ~/.operator/agents/myagent
-```
-
-Write `~/.operator/agents/myagent/AGENT.md`:
+## Minimal Agent
 
 ```markdown
 ---
-name: myagent
-description: Code review specialist that explains reasoning clearly.
+name: researcher
+description: Investigates technical questions and summarizes findings.
 ---
 
-You are a helpful assistant focused on code review.
-Always explain your reasoning before suggesting changes.
-Be concise but thorough.
+You are a research-focused agent.
+Prioritize primary sources, concise summaries, and practical next steps.
 ```
 
-### Frontmatter
-
-The YAML frontmatter between `---` delimiters is optional but enables inter-agent awareness:
-
-| Field | Required | Description |
-|-------|----------|-------------|
-| `name` | No | Agent name. Defaults to the directory name if omitted. |
-| `description` | No | Short description of the agent's role. Agents without a description are hidden from other agents. |
-
-When agents have frontmatter with a `description`, the runtime injects an "Available Agents" block into each agent's system prompt listing the other agents. This lets agents discover each other and delegate tasks via `spawn_agent`.
-
-The frontmatter is stripped before the prompt body is injected — the LLM only sees the markdown content below the closing `---`.
-
-Then register it in `operator.yaml`:
+Register the agent in `operator.yaml`:
 
 ```yaml
 agents:
-  myagent:
+  researcher:
     models:
-      - "anthropic/claude-sonnet-4-6"
-    thinking: medium
-    transport:
-      type: slack
-      bot_token_env: SLACK_BOT_TOKEN
-      app_token_env: SLACK_APP_TOKEN
+      - "openai/o3"
+    thinking: high
 ```
+
+Add a `transport:` block if you want the agent reachable in Slack.
+
+## Frontmatter
+
+| Field | Required | What it does |
+| --- | --- | --- |
+| `name` | no | Defaults to the directory name |
+| `description` | no | Used for agent discovery in other agents' prompts |
+
+If an agent has a `description`, other agents can see it in their injected "Available Agents" list and may choose it when calling `spawn_agent(agent="...")`.
+
+The frontmatter is stripped before prompt injection. The LLM sees only the markdown body.
 
 ## Workspace
 
-Each agent has a workspace at `~/.operator/agents/<name>/workspace/`. This is the working directory for all tool calls — shell commands, file reads/writes, and `list_files` all resolve relative paths against it. Files persist across conversations and job runs.
+Each agent runs with:
 
-A `shared/` symlink is automatically created inside each workspace pointing to `~/.operator/shared/`. Use this directory for files that need to be accessible to all agents.
+- working directory: `~/.operator/agents/<name>/workspace/`
+- prompt file: `~/.operator/agents/<name>/AGENT.md`
+- shared directory symlink: `workspace/shared -> ~/.operator/shared/`
 
-## System Prompt Assembly
+This workspace is used by:
 
-The full system prompt is assembled from multiple sources, split into a stable prefix and dynamic suffix separated by a cache boundary:
+- `run_shell`
+- `read_file`
+- `write_file`
+- `list_files`
+- `send_file`
+- `run_skill` subprocesses
 
-**Stable prefix** (cached across turns):
-1. **`SYSTEM.md`** — system preamble (auto-created at `~/.operator/SYSTEM.md`)
-2. **Runtime block** — stable runtime instructions, including `runtime.timezone`
-3. **`AGENT.md`** — agent prompt body (frontmatter stripped)
-4. **Available skills** — discovered from `skills/*/SKILL.md`
-5. **Available agents** — discovered from `agents/*/AGENT.md` frontmatter (other agents only)
+Files persist across chat turns and job runs.
 
-**Dynamic suffix** (changes per conversation/turn):
-6. **Context block** — platform, channel, user, workspace info (or job block for jobs)
-7. **Pinned memories** — always injected regardless of similarity (chat only)
-8. **Transport extras** — e.g. Slack channel list, messaging instructions
+## Prompt Assembly
 
-The stable prefix is reused across turns via Anthropic prompt-cache breakpoints, reducing token costs for multi-turn conversations.
+Operator assembles the system prompt in a fixed order.
 
-The runtime block adds stable timezone guidance, not a persisted live timestamp. Agents are told to interpret ambiguous dates and times using the configured timezone unless the user explicitly says otherwise.
+### Stable prefix
+
+1. `~/.operator/SYSTEM.md`
+2. runtime instructions, including the configured timezone contract
+3. the agent prompt body from `AGENT.md`
+4. discovered skills (`name` and `description`)
+5. discovered peer agents (`name` and `description`)
+
+### Dynamic suffix
+
+1. transport/job context
+2. pinned memories
+3. transport-specific help, such as Slack messaging guidance and channel lists
+
+Stable and dynamic sections are separated by an internal cache boundary. On Anthropic models, Operator uses that split to apply prompt caching safely.
 
 ## Current Time Injection
 
-Operator gives agents fresh current-time awareness without rewriting stored history.
+Operator does **not** write a live timestamp into stored history.
 
-Before each live model call, Operator:
+Instead, right before each model call it appends a fresh current-time block to the dynamic side of the first system message. That request-only block is used for:
 
-1. Loads the canonical stored messages for the conversation.
-2. Builds a transient request copy in memory.
-3. Appends a fresh current-time block to the first system message on the dynamic side of the cache boundary.
-4. Sends that transient request to the model, then discards the injected block.
+- chat turns
+- scheduled jobs
+- sub-agents
 
-This same request-time path is used for chat turns, scheduled jobs, and spawned sub-agents.
-
-```text
-Stored history:
-- system: stable prompt + dynamic context
-- user: "What time is it?"
-
-Request sent to the model:
-- system: stable prompt + dynamic context + current time block
-- user: "What time is it?"
-
-Persisted after reply:
-- system: stable prompt + dynamic context
-- user: "What time is it?"
-- assistant: "It's 11:31:50 AM PST."
-```
-
-The important constraint is that the injected time block is request-only. It is not persisted to conversation history, so memory harvesting and later turns only see real conversation content plus whatever the assistant explicitly chose to say back.
+The stored conversation remains stable.
 
 ## Sandbox
-
-By default, file tools (`read_file`, `write_file`, `list_files`, `send_file`) are sandboxed to the agent's workspace directory. Any path that escapes the workspace is rejected.
-
-Set `sandbox: false` to give an agent full filesystem access — useful for internal/trusted agents that need to manage skills, edit configs, or work across the system.
 
 ```yaml
 agents:
   operator:
-    sandbox: false    # full filesystem access
-    transport: { ... }
-
-  public-bot:
-    sandbox: true     # default — workspace only
-    transport: { ... }
+    sandbox: true
 ```
 
-- **`sandbox: true`** (default) — file tools reject paths outside the workspace.
-- **`sandbox: false`** — file tools accept absolute paths and paths outside the workspace. Relative paths still resolve from the workspace.
-- `run_shell` is not affected by sandbox — it always runs from the workspace as cwd but has no path restrictions. To restrict shell access for public-facing agents, remove `run_shell` from their `permissions.tools`.
-- Sub-agents inherit their parent's sandbox setting unless spawned as a different agent (via `spawn_agent(agent="...")`), in which case the target agent's sandbox setting is used.
+| Setting | Behavior |
+| --- | --- |
+| `sandbox: true` | File tools cannot escape the workspace |
+| `sandbox: false` | File tools may read/write outside the workspace |
 
-<Note>The `shared/` symlink inside each workspace points outside the workspace directory. Sandboxed agents can access shared files via `run_shell` but not through file tools directly. Unsandboxed agents have no such restriction.</Note>
+Important caveats:
 
-See [Configuration](/configuration#sandbox) for the config reference.
+- `run_shell` is unaffected by sandboxing
+- `shared/` is a symlink that resolves outside the workspace, so sandboxed file tools cannot follow it
+- shell commands can still access `shared/` because the shell runs from the workspace and follows the symlink normally
+
+Use sandboxing and permissions together for public-facing agents.
 
 ## Permissions
-
-Agents can be restricted to specific tools and skills using an opt-in permissions block in `operator.yaml`:
 
 ```yaml
 agents:
   researcher:
     permissions:
-      tools: [read_file, list_files, web_fetch, read_skill, run_skill, search_memories]
-      skills: [summarize, translate]
+      tools: [web_fetch, read_skill, run_skill, spawn_agent]
+      skills: [job-creator]
 ```
 
-- **No `permissions` block** — full access to all tools and skills (default).
-- **`"*"`** — explicit full access (equivalent to omitting the block).
-- **`[list]`** — only the listed names are available; everything else is hidden.
-- Unlisted tools and skills are removed from the LLM's view entirely.
-- Sub-agents inherit their parent's tool filter unless spawned as a different agent, in which case the target agent's permissions apply.
-- Run `operator tools` to see all available tool names.
+Permissions are flat allow-lists.
 
-<Tip>Sandbox and permissions are orthogonal. Permissions control **which** tools are visible. Sandbox controls **where** file tools can reach. Use both together for public-facing agents.</Tip>
+| Config | Result |
+| --- | --- |
+| omitted | unrestricted |
+| `"*"` | unrestricted |
+| list | only listed names are visible |
 
-User roles also control which agents a user can access — see [Users](/concepts/users) for details.
+Tool permissions and skill permissions are independent.
 
-See [Configuration](/configuration#permissions) for the full syntax reference.
+## Sub-Agents
 
-## Model Fallback
+`spawn_agent(task, context="", agent="")` creates a focused child run and returns its final response.
 
-Agents inherit `models` from `defaults` unless overridden. The model list is a fallback chain — if the first model errors (overloaded, rate limited, down), the next is tried automatically.
+Behavior depends on whether `agent=` is provided:
 
-## Thinking
+- no `agent`: inherit the current agent prompt, models, workspace, thinking level, sandbox setting, permissions, and shared dir
+- `agent="other"`: switch to the target agent's resolved config
 
-Agents inherit `thinking` from `defaults` unless overridden per agent.
-
-```yaml
-defaults:
-  thinking: off
-
-agents:
-  researcher:
-    thinking: high
-```
-
-Supported values are `off`, `low`, `medium`, and `high`.
-
-Operator maps that level to LiteLLM `reasoning_effort` when the selected model supports it. If the model does not support reasoning control, Operator drops the param and continues normally.
-
-Sub-agents inherit the caller's current thinking level unless they are spawned as a different agent, in which case the target agent's configured thinking level is used.
-
-See [Models & Thinking](/concepts/models) for the full behavior across fallback chains and jobs.
-
-## Cross-Agent Spawning
-
-The `spawn_agent` tool accepts an optional `agent` parameter to delegate a task to a different agent:
-
-```
-spawn_agent(task="Review this PR for security issues", agent="researcher")
-```
-
-When `agent` is specified, the sub-agent runs with the target agent's full config — its own system prompt, models, thinking level, workspace, sandbox setting, and permissions. When omitted, the sub-agent inherits the calling agent's context.
-
-Sub-agents are capped at 3 levels of nesting. Each spawn is logged with the parent agent, target agent, and depth for traceability.
-
-<Tip>Add `description` frontmatter to your agents so they can discover each other. Without it, agents won't appear in each other's "Available Agents" list and the LLM won't know they exist.</Tip>
+Sub-agents are limited to depth `3`.
 
 ## Headless Agents
 
-Agents without a `transport` block have no chat interface but are available for:
-- Running [jobs](/concepts/jobs)
-- Being spawned as sub-agents via `spawn_agent`
+Agents without a `transport` block are still useful for:
+
+- scheduled jobs
+- `spawn_agent(agent="...")`
+- shared model/prompt presets
+
+<Warning>
+  The long-running `operator` service still requires at least one transported agent somewhere in config. Headless-only configs cannot start the runtime.
+</Warning>
+
+## In Existing Slack Threads
+
+When an agent is first mentioned inside an existing Slack thread, Operator may inject a one-time snapshot of earlier thread replies so the model can see what happened before it joined. That snapshot is request-only and not treated as direct user input.
+
+## Related Docs
+
+- [Configuration](/configuration)
+- [Models & Thinking](/concepts/models)
+- [Built-in Tools](/concepts/tools)
+- [Slack](/transports/slack)

@@ -1,68 +1,106 @@
 ---
 title: "CLI Overview"
-description: "The operator command-line interface"
+description: "Command map for the operator CLI"
 ---
 
-The `operator` command doubles as the runtime server and a CLI for inspecting and managing state. Subcommands run standalone (no running service required).
+The `operator` command is both the long-running runtime entrypoint and the management CLI.
 
-## Usage
+## Scan First
+
+- Running `operator` with no subcommand starts the runtime.
+- Most CLI commands work without the background service running.
+- Agent-aware commands resolve the agent from `--agent`, then `OPERATOR_AGENT`, then the default agent in config.
+- `operator tools` shows built-in tools only. Transport tools are runtime-only.
+
+## Top-Level Commands
+
+| Command | Purpose |
+| --- | --- |
+| `operator` | start the runtime |
+| `operator init` | scaffold `~/.operator/` |
+| `operator setup` | guided onboarding |
+| `operator config` | print resolved config as JSON |
+| `operator agents` | list configured agents |
+| `operator tools` | list built-in tools |
+| `operator logs` | tail `operator.log` |
+
+## Command Groups
+
+| Group | Purpose |
+| --- | --- |
+| `operator user ...` | users, identities, and roles |
+| `operator service ...` | launchd/systemd service management |
+| `operator job ...` | inspect, enable/disable, and manually run jobs |
+| `operator skills ...` | list skills and reset bundled skills |
+| `operator kv ...` | inspect the per-agent key-value store |
+| `operator memories ...` | inspect stored memories |
+
+## Common Flows
+
+### First install
 
 ```sh
-operator                   # start the runtime
-operator <subcommand>      # run a CLI command
+pip install operator-ai
+operator setup --run
+```
+
+### Manual scaffold
+
+```sh
+operator init
+operator user add gavin --role admin slack U123ABC45
+operator
+```
+
+### Inspect a running setup
+
+```sh
+operator config
+operator agents
+operator tools
+operator logs -n 100
+```
+
+### Service management
+
+```sh
+operator service install
+operator service start
+operator service status
 ```
 
 ## Agent Resolution
 
-CLI commands that need an agent name resolve it in order:
+Commands like `operator kv ...` need an agent name. Resolution order is:
 
-1. `--agent` flag
-2. `OPERATOR_AGENT` environment variable
-3. Default agent from config
+1. explicit `--agent`
+2. `OPERATOR_AGENT`
+3. first configured agent in `operator.yaml`
 
-In job hook scripts, `OPERATOR_AGENT` is set automatically.
+If config is missing and you did not provide `--agent`, the command exits with an error.
 
-## Setup
+## Reference Pages
 
-```sh
-operator setup             # guided onboarding
-operator setup --run       # guided onboarding and start immediately
-operator init              # scaffold ~/.operator/ with starter files only
-```
-
-`operator setup` is the recommended first-run path. It scaffolds `~/.operator/`, prompts for provider, timezone, Slack tokens, and admin identity, then persists the minimum config needed to start using Operator.
-
-`operator init` only creates the directory structure, `operator.yaml`, `SYSTEM.md`, a default `AGENT.md`, and bundled skills. Safe to run multiple times — existing files and skills are not overwritten.
-
-## Inspection Commands
-
-```sh
-operator config            # print resolved configuration as JSON
-operator agents            # list configured agents with transport and model info
-```
-
-## User Management
-
-```sh
-operator user add <username> --role <role> <transport> <external_id>    # add a user with identity
-operator user list                                                       # list all users
-operator user remove <name>                                              # remove a user
-```
-
-See the [User CLI](/cli/users) for full details.
-
-## Tool Listing
-
-```sh
-operator tools                 # list all built-in tools
-```
-
-Useful for configuring agent [permissions](/concepts/agents#permissions) — shows the exact tool names to use in the permissions block.
-
-## Log Viewing
-
-```sh
-operator logs [-f/--follow] [-n/--lines N]
-```
-
-Tails `~/.operator/logs/operator.log`. Defaults to the last 50 lines.
+<CardGroup cols={2}>
+  <Card title="Runtime Commands" icon="terminal" href="/cli/runtime">
+    `operator`, `init`, `setup`, `config`, `agents`, `tools`, and `logs`.
+  </Card>
+  <Card title="Users" icon="users" href="/cli/users">
+    Add users, link identities, inspect roles, and remove users.
+  </Card>
+  <Card title="Service" icon="server" href="/cli/service">
+    Manage launchd or systemd service installation and lifecycle.
+  </Card>
+  <Card title="Jobs" icon="clock" href="/cli/jobs">
+    Inspect, enable, disable, and manually run jobs.
+  </Card>
+  <Card title="Skills" icon="wand-magic-sparkles" href="/cli/skills">
+    List skills and reset bundled skills.
+  </Card>
+  <Card title="KV Store" icon="database" href="/cli/kv">
+    Read and write the per-agent key-value store.
+  </Card>
+  <Card title="Memories" icon="brain" href="/cli/memories">
+    Inspect stored memories and memory counts by scope.
+  </Card>
+</CardGroup>
