@@ -9,11 +9,14 @@ description: "Release history for Operator"
 
 - **Guided setup onboarding** — `operator setup` now walks through provider selection, timezone detection, Slack credentials, and first-admin creation. Use `operator setup --run` to start the runtime immediately after onboarding.
 - **`python -m operator_ai` entrypoint** — you can now run Operator via the Python module entrypoint when the `operator` script is not yet on your `PATH`.
+- **Simple `thinking` config** — agents now support `thinking: off|low|medium|high` at the defaults and per-agent level. Operator maps this to LiteLLM `reasoning_effort` for supported reasoning models.
 
 ### Changed
 
 - Runtime/process config now lives under `runtime` in `operator.yaml`. `timezone`, `env_file`, `show_usage`, and `reject_response` no longer live under `defaults` or `settings`.
 - `runtime.timezone` now drives request-time current-time injection for chats, jobs, and sub-agents. Operator appends a fresh timestamp block to the transient model request only, while keeping the stable system prompt and persisted conversation history unchanged.
+- Jobs and sub-agents now inherit the resolved agent thinking level. There is no per-job thinking override.
+- Cross-provider fallback now drops preserved reasoning metadata before each model call so retries remain safe when moving between reasoning-capable and non-capable models.
 
 ### Fixed
 

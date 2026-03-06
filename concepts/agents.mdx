@@ -46,6 +46,7 @@ agents:
   myagent:
     models:
       - "anthropic/claude-sonnet-4-6"
+    thinking: medium
     transport:
       type: slack
       bot_token_env: SLACK_BOT_TOKEN
@@ -163,6 +164,27 @@ See [Configuration](/configuration#permissions) for the full syntax reference.
 
 Agents inherit `models` from `defaults` unless overridden. The model list is a fallback chain — if the first model errors (overloaded, rate limited, down), the next is tried automatically.
 
+## Thinking
+
+Agents inherit `thinking` from `defaults` unless overridden per agent.
+
+```yaml
+defaults:
+  thinking: off
+
+agents:
+  researcher:
+    thinking: high
+```
+
+Supported values are `off`, `low`, `medium`, and `high`.
+
+Operator maps that level to LiteLLM `reasoning_effort` when the selected model supports it. If the model does not support reasoning control, Operator drops the param and continues normally.
+
+Sub-agents inherit the caller's current thinking level unless they are spawned as a different agent, in which case the target agent's configured thinking level is used.
+
+See [Models & Thinking](/concepts/models) for the full behavior across fallback chains and jobs.
+
 ## Cross-Agent Spawning
 
 The `spawn_agent` tool accepts an optional `agent` parameter to delegate a task to a different agent:
@@ -171,7 +193,7 @@ The `spawn_agent` tool accepts an optional `agent` parameter to delegate a task 
 spawn_agent(task="Review this PR for security issues", agent="researcher")
 ```
 
-When `agent` is specified, the sub-agent runs with the target agent's full config — its own system prompt, models, workspace, sandbox setting, and permissions. When omitted, the sub-agent inherits the calling agent's context.
+When `agent` is specified, the sub-agent runs with the target agent's full config — its own system prompt, models, thinking level, workspace, sandbox setting, and permissions. When omitted, the sub-agent inherits the calling agent's context.
 
 Sub-agents are capped at 3 levels of nesting. Each spawn is logged with the parent agent, target agent, and depth for traceability.
 

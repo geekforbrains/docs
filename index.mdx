@@ -17,6 +17,8 @@ Built for teams, not just individuals. Multi-user auth, role-based access, isola
 - **Multi-agent orchestration.** Agents delegate to each other via `spawn_agent`. A coordinator can dispatch work to a researcher, a coder, and a reviewer — each with their own prompt, tools, and permissions.
 - **Team-native.** Multi-user auth with roles. Control who can talk to which agents. Isolated per-user memories. Not a single-player toy.
 - **Markdown-driven.** Agents, jobs, and skills are markdown files with YAML frontmatter. Version them in git, review them in PRs, edit them in your editor. No dashboards, no YAML hellscapes.
+- **Time-aware without history churn.** Every live model request gets fresh current-time context in your configured timezone without mutating the stable system prompt or persisted conversation history.
+- **Portable thinking controls.** Set `thinking: off|low|medium|high` and let Operator map it to provider-specific reasoning controls when supported.
 - **Model-agnostic.** Supports 100+ LLM providers out of the box. Define fallback chains so if your primary model is down, the next one picks up automatically.
 - **Runs on your machine.** No SaaS, no cloud dependency, no data leaving your network. Install it, run it, own it.
 
@@ -27,7 +29,10 @@ Built for teams, not just individuals. Multi-user auth, role-based access, isola
     Install and talk to your first agent in under 5 minutes.
   </Card>
   <Card title="Configuration" icon="gear" href="/configuration">
-    Models, agents, memory, permissions, and transports.
+    Models, thinking, memory, permissions, and transports.
+  </Card>
+  <Card title="Models" icon="brain-circuit" href="/concepts/models">
+    Model fallback chains, reasoning levels, and inheritance.
   </Card>
   <Card title="Agents" icon="robot" href="/concepts/agents">
     Define agents with markdown files and YAML frontmatter.

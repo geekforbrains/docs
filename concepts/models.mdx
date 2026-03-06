@@ -1,0 +1,115 @@
+---
+title: "Models & Thinking"
+description: "Fallback chains, reasoning levels, and model-selection behavior"
+---
+
+Operator uses [LiteLLM model identifiers](https://docs.litellm.ai/docs/providers) in `provider/model-name` format:
+
+```yaml
+defaults:
+  models:
+    - "anthropic/claude-opus-4-6"
+    - "openai/gpt-4.1"
+```
+
+## Fallback Chains
+
+`models` is a fallback chain.
+
+- The first model is the preferred model.
+- If that call errors, Operator retries the same request with the next model in the list.
+- This check happens on every live model call, not just once per conversation.
+
+When a fallback succeeds, Operator logs that recovery so you can see which model actually answered.
+
+<Tip>If you want automatic fallback for jobs, leave `model` unset in `JOB.md` and configure the fallback chain on the agent instead.</Tip>
+
+## Thinking Levels
+
+Operator exposes a simple public `thinking` setting instead of provider-specific reasoning budgets:
+
+```yaml
+defaults:
+  thinking: off
+
+agents:
+  researcher:
+    models:
+      - "anthropic/claude-sonnet-4-6"
+    thinking: high
+
+  planner:
+    models:
+      - "openai/o3"
+    thinking: medium
+
+  fast-bot:
+    models:
+      - "gemini/gemini-2.5-flash"
+    thinking: low
+```
+
+Supported values:
+
+- `off`
+- `low`
+- `medium`
+- `high`
+
+Internally, Operator maps these to LiteLLM `reasoning_effort`:
+
+| Operator value | LiteLLM param |
+|---------------|---------------|
+| `off` | `reasoning_effort="none"` |
+| `low` | `reasoning_effort="low"` |
+| `medium` | `reasoning_effort="medium"` |
+| `high` | `reasoning_effort="high"` |
+
+## Capability Handling
+
+Reasoning control is resolved against the concrete model being called, not just the provider name.
+
+- If the selected model supports `reasoning_effort`, Operator sends it.
+- If the selected model does not support it, Operator omits the param and continues normally.
+- If a fallback chain moves from a thinking-capable model to a non-capable model, the retry still works.
+
+Operator also strips preserved reasoning metadata from assistant history before each model call so cross-provider fallback does not break on provider-specific response fields.
+
+## Inheritance Rules
+
+`thinking` is available in:
+
+- `defaults.thinking`
+- `agents.<name>.thinking`
+
+It is not available in job frontmatter.
+
+Behavior by execution type:
+
+- Chat turns use the resolved agent thinking level.
+- `spawn_agent()` without `agent="..."` inherits the calling agent's current thinking level.
+- `spawn_agent(agent="other")` switches to the target agent's configured thinking level.
+- Jobs inherit the selected agent's thinking level, even when the job overrides `model`.
+
+## Job Overrides
+
+Jobs currently support:
+
+- `model`
+- `max_iterations`
+
+They do not support:
+
+- `thinking`
+- `context_ratio`
+- `max_output_tokens`
+
+Those continue to come from the resolved agent/default config.
+
+## Output Limits
+
+`max_output_tokens` still controls `max_tokens` for model calls. When it is `null`, Operator asks LiteLLM for the model's max output size and uses that when available.
+
+This existing `max_tokens` behavior is preserved for reasoning-capable models too.
+
+See [Configuration](/configuration) for the full config schema and [Agents](/concepts/agents) for inheritance behavior across sub-agents.

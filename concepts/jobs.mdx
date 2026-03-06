@@ -14,6 +14,7 @@ description: Summarize today's activity
 schedule: "0 9 * * *"
 agent: operator
 model: "anthropic/claude-sonnet-4-6"
+max_iterations: 10
 hooks:
   prerun: scripts/check.sh
   postrun: scripts/notify.sh
@@ -30,9 +31,16 @@ Cron schedules are evaluated in `runtime.timezone` from `operator.yaml`. Jobs al
 
 Each live model call during a job run also gets a fresh current-time block injected at request time in that timezone. The injected block is not written into persisted job conversation history.
 
-## Model Override
+## Execution Overrides
 
-Set `model` in the frontmatter to override the agent's configured model for this job. Uses [LiteLLM format](https://docs.litellm.ai/docs/providers) (`provider/model-name`). When omitted, the agent's model chain from `operator.yaml` is used.
+Jobs support two execution overrides in frontmatter:
+
+| Field | Description |
+|-------|-------------|
+| `model` | Override the agent's configured model for this job. |
+| `max_iterations` | Override the agent's max tool-call loop count for this job. |
+
+`model` uses [LiteLLM format](https://docs.litellm.ai/docs/providers) (`provider/model-name`). When omitted, the agent's model chain from `operator.yaml` is used.
 
 This is useful for running cheaper models on simple recurring tasks:
 
@@ -45,6 +53,18 @@ model: "anthropic/claude-haiku-4-5"
 
 Check all links in the docs site and report any 404s.
 ```
+
+## Thinking Inheritance
+
+Jobs do not have a per-job `thinking` field.
+
+- `thinking` comes from the resolved agent config.
+- If you set `model` on the job, that only changes the model selection.
+- `context_ratio` and `max_output_tokens` also continue to come from the agent/default config.
+
+If you want a job to use a different thinking level, run it under a different agent or add an agent-level override.
+
+See [Models & Thinking](/concepts/models) for the full inheritance rules.
 
 ## Hooks
 

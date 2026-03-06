@@ -36,6 +36,7 @@ defaults:
   models:
     - "anthropic/claude-opus-4-6"
     - "openai/gpt-4.1"
+  thinking: off
   max_iterations: 25
   context_ratio: 0.5
   max_output_tokens: null
@@ -44,9 +45,34 @@ defaults:
 | Field | Description |
 |-------|-------------|
 | `models` | Fallback chain — if the first model errors, the next is tried. Always use list format. |
+| `thinking` | Reasoning level for supported models: `off`, `low`, `medium`, or `high`. Defaults to `off`. |
 | `max_iterations` | Maximum tool-call loops per agent run. |
 | `context_ratio` | Fraction of context window to use for conversation history. |
 | `max_output_tokens` | Cap output length per LLM call. `null` uses each model's max. |
+
+### Thinking
+
+Operator keeps reasoning control deliberately simple:
+
+```yaml
+defaults:
+  thinking: off
+
+agents:
+  researcher:
+    thinking: high
+```
+
+- `off`
+- `low`
+- `medium`
+- `high`
+
+Operator maps these to LiteLLM `reasoning_effort` when the concrete model supports it. If a model in the fallback chain does not support reasoning control, Operator omits the param and continues normally.
+
+This capability check happens per model call, so fallback chains can safely move between reasoning-capable and non-capable models.
+
+<Tip>See [Models & Thinking](/concepts/models) for inheritance, fallback, and job behavior.</Tip>
 
 ## Agents
 
@@ -55,13 +81,14 @@ agents:
   operator:
     models:
       - "anthropic/claude-sonnet-4-6"
+    thinking: medium
     transport:
       type: slack
       bot_token_env: SLACK_BOT_TOKEN
       app_token_env: SLACK_APP_TOKEN
 ```
 
-Each agent can override `models`, `max_iterations`, `context_ratio`, and `max_output_tokens` from defaults. Agents without a `transport` block are available for jobs and sub-agent spawning but have no chat interface.
+Each agent can override `models`, `thinking`, `max_iterations`, `context_ratio`, and `max_output_tokens` from defaults. Agents without a `transport` block are available for jobs and sub-agent spawning but have no chat interface.
 
 ### Sandbox
 
@@ -159,6 +186,23 @@ Extracts facts from conversations using an LLM and stores them as vector embeddi
 Deduplicates, merges, and tidies stored memories by sending them through an LLM. When enabled, `schedule` and `model` are required.
 
 See [Memory](/concepts/memory) for more on scopes, pinning, and retrieval.
+
+## Jobs and Inheritance
+
+Jobs inherit the resolved agent config for:
+
+- `thinking`
+- `context_ratio`
+- `max_output_tokens`
+- permissions
+- sandboxing
+
+Job frontmatter can override:
+
+- `model`
+- `max_iterations`
+
+There is currently no per-job `thinking` field. If you need a different reasoning level for a job, create or target a different agent config.
 
 ## Environment Variables
 
