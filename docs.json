@@ -3,9 +3,9 @@
   "theme": "mint",
   "name": "Operator",
   "colors": {
-    "primary": "#6D28D9",
-    "light": "#8B5CF6",
-    "dark": "#5B21B6"
+    "primary": "#B45309",
+    "light": "#D97706",
+    "dark": "#92400E"
   },
   "favicon": "/favicon.svg",
   "hero": {
