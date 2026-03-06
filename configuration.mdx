@@ -11,12 +11,12 @@ Runtime config lives at `~/.operator/operator.yaml`.
 defaults:
   models:
     - "anthropic/claude-opus-4-6"
-    - "openai/gpt-5.3-codex"
+    - "openai/gpt-4.1"
   max_iterations: 25
   context_ratio: 0.5
   max_output_tokens: null
   timezone: "America/Vancouver"
-  env_file: "~/.env"
+  env_file: ".env"
 ```
 
 | Field | Description |
@@ -26,7 +26,7 @@ defaults:
 | `context_ratio` | Fraction of context window to use for conversation history. |
 | `max_output_tokens` | Cap output length per LLM call. `null` uses each model's max. |
 | `timezone` | IANA timezone for system prompt timestamps and job scheduling. Defaults to `UTC`. |
-| `env_file` | Path to env file for API keys. Supports `~` expansion. |
+| `env_file` | Path to env file for API keys. Relative paths resolve from `~/.operator/`. Supports `~` expansion. |
 
 ## Agents
 
@@ -142,7 +142,7 @@ See [Memory](/concepts/memory) for more on scopes, pinning, and retrieval.
 
 ## Environment Variables
 
-API keys are resolved from the environment, loaded via `env_file`:
+API keys are resolved from the environment, loaded via `env_file`. The default is `.env` (relative to `~/.operator/`), created automatically by `operator init`:
 
 ```sh
 # LLM providers

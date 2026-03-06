@@ -13,3 +13,7 @@ operator service stop          # stop the background service
 operator service restart       # restart the background service
 operator service status        # show whether the service is running
 ```
+
+## PATH Capture
+
+`service install` captures your current shell's `PATH` and embeds it in the service definition. This means tools installed via Homebrew, pyenv, nvm, etc. are available to your agents even when running under launchd/systemd. If you install new tools, re-run `operator service install` to update the PATH.

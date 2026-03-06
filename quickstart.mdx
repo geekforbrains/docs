@@ -25,6 +25,7 @@ operator init
 
 This scaffolds `~/.operator/` with everything you need:
 - `operator.yaml` — runtime config
+- `.env` — API key file (add your keys here)
 - `SYSTEM.md` — system preamble
 - `agents/operator/AGENT.md` — your first agent
 - `skills/` — bundled starter skills
@@ -40,7 +41,7 @@ defaults:
   models:
     - "anthropic/claude-sonnet-4-6"
   max_iterations: 25
-  env_file: "~/.env"
+  env_file: ".env"
 
 agents:
   operator:
@@ -50,7 +51,7 @@ agents:
       app_token_env: SLACK_APP_TOKEN
 ```
 
-Set your API keys in `~/.env`:
+Set your API keys in `~/.operator/.env` (created by `operator init`):
 
 ```sh
 ANTHROPIC_API_KEY=sk-ant-...

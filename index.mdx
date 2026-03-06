@@ -42,8 +42,11 @@ Built for teams, not just individuals. Multi-user auth, role-based access, isola
 ```text
 ~/.operator/
 ├── operator.yaml           # runtime config
+├── .env                    # API keys (gitignored)
 ├── SYSTEM.md               # system preamble
 ├── shared/                 # files shared across all agents
+├── state/                  # SQLite database
+├── logs/                   # operator.log
 ├── agents/
 │   └── <agent>/
 │       ├── AGENT.md        # agent prompt

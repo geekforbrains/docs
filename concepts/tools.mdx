@@ -9,10 +9,10 @@ Every agent has access to these built-in tools:
 
 | Tool | Description |
 |------|-------------|
-| `run_shell` | Execute shell commands in the agent's workspace |
+| `run_shell` | Execute shell commands in the agent's workspace. Optional `timeout` (default 120s). |
 | `read_file` | Read file contents |
 | `write_file` | Write or overwrite a file |
-| `list_files` | List files in a directory |
+| `list_files` | List files in a directory. Optional `max_depth` (default 2). |
 
 All file paths resolve relative to the agent's workspace at `~/.operator/agents/<name>/workspace/`. By default, paths that escape the workspace are rejected. Set `sandbox: false` on the agent to allow full filesystem access — see [Sandbox](/concepts/agents#sandbox).
 
@@ -20,7 +20,7 @@ All file paths resolve relative to the agent's workspace at `~/.operator/agents/
 
 | Tool | Description |
 |------|-------------|
-| `web_fetch` | Fetch and extract content from a URL |
+| `web_fetch` | Fetch and extract content from a URL. Supports `offset` and `limit` parameters for paginating large content (default limit 16000 chars). |
 
 ## Messaging
 
