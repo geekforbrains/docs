@@ -84,19 +84,20 @@ runtime:
 
 | Field | Default | What it does |
 | --- | --- | --- |
-| `timezone` | `UTC` | Used for cron matching, Slack timestamp formatting, stable prompt timezone guidance, and request-time current-time injection |
+| `timezone` | `UTC` | Used for cron matching, Slack timestamp formatting, and rendering `user` message creation timestamps into model input |
 | `env_file` | `null` | Optional `.env` file path. Relative paths resolve from the config file directory |
 | `show_usage` | `false` | Sends a usage summary after each completed chat response |
 | `reject_response` | `ignore` | Unknown or unauthorized user behavior: `ignore` or `announce` |
 
 ### `runtime.timezone`
 
-Operator uses the configured timezone in two separate ways:
+Operator uses the configured timezone in three places:
 
-1. A **stable runtime block** tells the model how to interpret ambiguous dates and times.
-2. A **request-only current-time block** is appended right before each live model call.
+1. Cron matching for scheduled jobs.
+2. Slack timestamp formatting.
+3. Rendering `user` message creation timestamps right before each live model call, for example `[Monday, 2026-03-09T09:22:40-07:00]`.
 
-That current-time block is not persisted to conversation history.
+This applies to chat turns, scheduled jobs, and sub-agent task messages. Older stored messages without `created_at` are left unstamped.
 
 ### `runtime.env_file`
 

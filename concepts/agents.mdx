@@ -74,10 +74,9 @@ Operator assembles the system prompt in a fixed order.
 ### Stable prefix
 
 1. `~/.operator/SYSTEM.md`
-2. runtime instructions, including the configured timezone contract
-3. the agent prompt body from `AGENT.md`
-4. discovered skills (`name` and `description`)
-5. discovered peer agents (`name` and `description`)
+2. the agent prompt body from `AGENT.md`
+3. discovered skills (`name` and `description`)
+4. discovered peer agents (`name` and `description`)
 
 ### Dynamic suffix
 
@@ -87,17 +86,23 @@ Operator assembles the system prompt in a fixed order.
 
 Stable and dynamic sections are separated by an internal cache boundary. On Anthropic models, Operator uses that split to apply prompt caching safely.
 
-## Current Time Injection
+## Message Timestamp Rendering
 
-Operator does **not** write a live timestamp into stored history.
+Operator stores a nullable `created_at` separately from message content and only stamps `user` messages when building a live model request.
 
-Instead, right before each model call it appends a fresh current-time block to the dynamic side of the first system message. That request-only block is used for:
+That means:
 
-- chat turns
-- scheduled jobs
-- sub-agents
+- chat turns get their inbound message time rendered into the prompt
+- scheduled jobs get their run-start time rendered onto the job body
+- `spawn_agent(...)` gets the child task time rendered onto the sub-agent's initial `user` message
 
-The stored conversation remains stable.
+The rendered format is local to `runtime.timezone`, for example:
+
+```text
+[Monday, 2026-03-09T09:22:40-07:00]
+```
+
+Assistant, tool, and system messages are not stamped. Older stored messages with `null` `created_at` remain unchanged.
 
 ## Sandbox
 
@@ -150,6 +155,8 @@ Behavior depends on whether `agent=` is provided:
 - `agent="other"`: switch to the target agent's resolved config
 
 Sub-agents are limited to depth `3`.
+
+The child run's initial `user` message is timestamp-rendered the same way as chat and job requests.
 
 ## Headless Agents
 

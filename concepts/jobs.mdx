@@ -9,6 +9,7 @@ Jobs are stored in `~/.operator/jobs/<name>/JOB.md`.
 
 - Cron schedules are evaluated in `runtime.timezone`.
 - Job prompts are markdown bodies under YAML frontmatter.
+- The job body becomes a stamped `user` message when the run starts.
 - `prerun` can gate a job by returning non-zero.
 - `postrun` receives the final model output on stdin.
 - Scheduled jobs only get transport messaging if the target agent has a runtime transport.
@@ -34,7 +35,7 @@ Summarize the key events from the last 24 hours.
 Post a short teaser to #general, then reply in a thread with the full summary.
 ```
 
-The body is the user prompt for the job run.
+The body is the user prompt for the job run, timestamp-rendered at execution time in `runtime.timezone`.
 
 ## Scheduler Behavior
 
@@ -57,7 +58,6 @@ The execution agent is:
 That chosen agent supplies:
 
 - the prompt body from `AGENT.md`
-- the runtime timezone contract
 - permissions
 - sandbox setting
 - `thinking`

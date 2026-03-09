@@ -79,8 +79,8 @@ Operator is a local runtime for autonomous agents that live in Slack, use tools,
 ## How A Request Flows
 
 1. A Slack DM, Slack `@mention`, or scheduled job starts a run.
-2. Operator loads config, resolves the agent, and assembles the system prompt from `SYSTEM.md`, runtime instructions, `AGENT.md`, skills, and agent metadata.
-3. It injects request-only context like current time, thread snapshots, and relevant memories without mutating the stored prompt history.
+2. Operator loads config, resolves the agent, and assembles the system prompt from `SYSTEM.md`, `AGENT.md`, skills, and agent metadata.
+3. It renders creation-time stamps onto `user` messages in the configured timezone, for example `[Monday, 2026-03-09T09:22:40-07:00]`, and injects any conversation context it needs for the run.
 4. The agent runs a model/tool loop until it returns a final answer or hits `max_iterations`.
 5. Messages, job state, KV data, and memory state are stored in SQLite.
 
