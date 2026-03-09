@@ -142,11 +142,14 @@ memory:
   harvester:
     enabled: true
     schedule: "*/30 * * * *"
-    model: "openai/gpt-4.1-mini"
+    models:
+      - "openai/gpt-4.1-mini"
+      - "anthropic/claude-sonnet-4-6"
   cleaner:
     enabled: true
     schedule: "0 3 * * *"
-    model: "openai/gpt-4.1-mini"
+    models:
+      - "openai/gpt-4.1-mini"
 ```
 
 Tuning guidelines:

@@ -64,11 +64,12 @@ memory:
   harvester:
     enabled: true
     schedule: "*/30 * * * *"
-    model: "openai/gpt-4.1-mini"
+    models:
+      - "openai/gpt-4.1-mini"
   cleaner:
     enabled: false
     schedule: ""
-    model: ""
+    models: []
 ```
 
 ## `runtime`
@@ -261,11 +262,13 @@ memory:
   harvester:
     enabled: true
     schedule: "*/30 * * * *"
-    model: "openai/gpt-4.1-mini"
+    models:
+      - "openai/gpt-4.1-mini"
   cleaner:
     enabled: true
     schedule: "0 3 * * *"
-    model: "openai/gpt-4.1-mini"
+    models:
+      - "openai/gpt-4.1-mini"
 ```
 
 | Field | Default | Notes |
@@ -295,7 +298,9 @@ When either worker is enabled:
 
 - `embed_model` becomes required
 - `schedule` must be a valid cron expression
-- `model` must be a valid LiteLLM model string
+- `models` must contain at least one valid LiteLLM model string
+
+`models` is a fallback chain, just like `defaults.models`. If the first model errors or is rate-limited, the next one is tried. A singular `model:` key is also accepted and normalized into a one-element list.
 
 The harvester reviews recent conversations and extracts reusable facts. The cleaner works scope-by-scope and can merge, split, or delete memories, but it may not delete pinned memories.
 
