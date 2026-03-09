@@ -5,6 +5,29 @@ description: "Release history for Operator"
 
 ## Unreleased
 
+## 0.7.0 · 2026-03-09
+
+### Added
+
+- Chat turns, scheduled jobs, and sub-agent task messages now carry rendered creation timestamps in local time, for example `[Monday, 2026-03-09T09:22:40-07:00]`
+- The runtime now stores a nullable `created_at` value for persisted messages so new history can preserve request timing without rewriting older rows
+
+### Changed
+
+- Time awareness now comes from per-message timestamp rendering instead of an appended request-only current-time system block
+- `runtime.timezone` now drives cron matching, Slack timestamp formatting, and the rendered local timestamp shown to models
+
+### Fixed
+
+- Memory harvester and cleaner model calls now use the same fallback-chain behavior as normal agent requests
+- Runtime error logging for memory workers and exhausted model fallbacks is cleaner and less traceback-heavy
+
+## 0.6.2 · 2026-03-06
+
+### Fixed
+
+- OpenAI reasoning models with tool calls now route through LiteLLM's Responses bridge when `reasoning_effort` is enabled, avoiding the `gpt-5.4` `/v1/chat/completions` `BadRequestError` that required `/v1/responses`
+
 ## 0.6.1 · 2026-03-06
 
 ### Fixed
