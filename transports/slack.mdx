@@ -80,6 +80,21 @@ agents:
       app_token_env: SLACK_APP_TOKEN
 ```
 
+Optional overrides:
+
+```yaml
+agents:
+  operator:
+    transport:
+      type: slack
+      bot_token_env: SLACK_BOT_TOKEN
+      app_token_env: SLACK_APP_TOKEN
+      include_archived_channels: false
+      inject_channels_into_prompt: false
+      channel_cache_ttl_seconds: 900
+      warm_channels_on_startup: true
+```
+
 ## What The Runtime Handles
 
 SlackTransport accepts:
@@ -100,6 +115,9 @@ Slack runtime behavior includes:
 - resolving channel IDs to `#channel-name`
 - formatting Slack timestamps in your configured timezone
 - exposing channel-reading tools to the agent
+- warming an in-memory per-bot channel cache on startup by default
+- refreshing that cache lazily on demand after TTL expiry or lookup miss
+- excluding archived channels from discovery unless you opt in
 
 When the agent is first mentioned inside an existing thread, Operator may inject a one-time snapshot of earlier replies in that thread so the model has context it missed before being added.
 
@@ -140,11 +158,13 @@ These tools exist only during live Slack-backed runs:
 
 | Tool | Use it for |
 | --- | --- |
-| `list_channels()` | list postable channels, IDs, and cached topic/purpose snippets |
+| `list_channels(query="")` | list postable channels, IDs, and cached topic/purpose snippets, optionally filtered by substring |
 | `read_channel(channel, count=20)` | fetch recent channel messages |
 | `read_thread(channel, thread_id, count=50)` | fetch thread replies |
 
 `send_message` also accepts Slack channel names like `#general` or raw channel IDs.
+
+By default, Slack channel names are not injected into the system prompt. Use `list_channels()` when the agent needs to inspect destinations first, or set `inject_channels_into_prompt: true` for a specific bot if you want cached channel names included in prompt extras.
 
 ## File Handling
 

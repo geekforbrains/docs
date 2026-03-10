@@ -39,6 +39,10 @@ agents:
       type: slack
       bot_token_env: SLACK_BOT_TOKEN
       app_token_env: SLACK_APP_TOKEN
+      include_archived_channels: false
+      inject_channels_into_prompt: false
+      channel_cache_ttl_seconds: 900
+      warm_channels_on_startup: true
 
   researcher:
     models:
@@ -164,6 +168,10 @@ agents:
       type: slack
       bot_token_env: SLACK_BOT_TOKEN
       app_token_env: SLACK_APP_TOKEN
+      include_archived_channels: false
+      inject_channels_into_prompt: false
+      channel_cache_ttl_seconds: 900
+      warm_channels_on_startup: true
     permissions:
       tools: [read_file, list_files, web_fetch]
       skills: [job-creator]
@@ -218,17 +226,40 @@ transport:
   type: slack
   bot_token_env: SLACK_BOT_TOKEN
   app_token_env: SLACK_APP_TOKEN
+  include_archived_channels: false
+  inject_channels_into_prompt: false
+  channel_cache_ttl_seconds: 900
+  warm_channels_on_startup: true
 ```
 
 `transport.type` must currently be `slack`.
 
-| Field | Required | Notes |
-| --- | --- | --- |
-| `type` | yes | Only `slack` is supported |
-| `bot_token_env` | yes | Env var name for the bot token |
-| `app_token_env` | yes | Env var name for the Socket Mode app token |
+| Field | Default | Required | Notes |
+| --- | --- | --- | --- |
+| `type` | none | yes | Only `slack` is supported |
+| `bot_token_env` | none | yes | Env var name for the bot token |
+| `app_token_env` | none | yes | Env var name for the Socket Mode app token |
+| `include_archived_channels` | `false` | no | Include archived channels in Slack channel discovery and resolution |
+| `inject_channels_into_prompt` | `false` | no | Append cached Slack channels to the transport prompt extra instead of relying on `list_channels()` |
+| `channel_cache_ttl_seconds` | `900` | no | Refresh stale Slack channel cache entries on the next channel-aware operation after this many seconds |
+| `warm_channels_on_startup` | `true` | no | Kick off a one-shot startup warmup for Slack channel discovery |
 
 Tokens are resolved from the process environment after `runtime.env_file` is loaded.
+
+Slack channel discovery is per bot token and stays in memory only. Operator warms the cache once on startup by default, then refreshes lazily when a channel-aware operation needs it or a channel-name lookup misses the cache. Archived channels are excluded by default.
+
+Example override:
+
+```yaml
+transport:
+  type: slack
+  bot_token_env: SLACK_BOT_TOKEN
+  app_token_env: SLACK_APP_TOKEN
+  include_archived_channels: true
+  inject_channels_into_prompt: true
+  channel_cache_ttl_seconds: 300
+  warm_channels_on_startup: false
+```
 
 ## `roles`
 

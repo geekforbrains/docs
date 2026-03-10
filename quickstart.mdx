@@ -119,6 +119,15 @@ roles:
     agents: []
 ```
 
+Slack transport defaults are:
+
+- `include_archived_channels: false`
+- `inject_channels_into_prompt: false`
+- `channel_cache_ttl_seconds: 900`
+- `warm_channels_on_startup: true`
+
+Override them under the agent's `transport:` block if you want archived channels included, cached channels injected into prompts, a different cache TTL, or startup warmup disabled.
+
 Add secrets to `~/.operator/.env`:
 
 ```sh
