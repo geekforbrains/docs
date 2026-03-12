@@ -11,6 +11,9 @@ description: "Release history for Operator"
 - Public docs now describe `spawn_agent(...)` as a fresh isolated child run for both same-agent and cross-agent delegation.
 - Public docs now describe `context_ratio` as full-request budgeting, including tool schemas and multimodal payloads.
 - Public docs now clarify that prompt/job context and job hooks use the active `OPERATOR_HOME` for the loaded config.
+- Public docs now describe Slack's exact-match `stop` / `cancel` control messages instead of the removed `!command` surface.
+- Public docs now describe the one-active-request-per-conversation rule and the current busy reply.
+- Public docs now describe runtime-owned state as following the active Operator home, not just the default `~/.operator/` path.
 
 <Note>
   Older changelog entries describe the product as it existed in those releases. Current behavior is documented in the rest of this site.

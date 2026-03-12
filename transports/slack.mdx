@@ -1,6 +1,6 @@
 ---
 title: "Slack"
-description: "Slack app setup, runtime behavior, commands, and transport tools"
+description: "Slack app setup, runtime behavior, stop/cancel control, and transport tools"
 ---
 
 Operator uses Slack Socket Mode. You do not need a public webhook URL.
@@ -11,7 +11,7 @@ Operator uses Slack Socket Mode. You do not need a public webhook URL.
 - Supported files: inline images up to 5 MB, all other files saved locally up to 50 MB
 - The runtime uses the authenticated user's stored timezone when rendering live prompt timestamps
 - Slack adds transport tools like `slack_find_users`, `slack_list_channels`, and `slack_read_thread`
-- In-chat commands start with `!` and bypass the LLM
+- Exact `stop` and `cancel` messages bypass the LLM and cancel the active request in that conversation
 
 ## Slack App Setup
 
@@ -115,22 +115,21 @@ When the agent is first mentioned inside an existing thread, Operator may inject
 
 Reaction events are buffered as lightweight system events and injected into the next request in the same conversation.
 
-## In-Chat Commands
+## Stop And Cancel
 
-Commands bypass the LLM and are handled directly by the runtime.
+Slack does not have a general in-chat command surface.
 
-| Command | Behavior |
-| --- | --- |
-| `!help` | list available commands |
-| `!stop` | cancel the active request in the current conversation |
-| `!restart` | returns a message telling you to use the CLI |
-| `!agents` | list configured agents |
-| `!jobs` | list jobs |
-| `!jobs <name>` | show one job's details |
-| `!skills` | list discovered skills |
-| `!memories` | list active rules from agent and global memory |
+If a message contains only `stop` or `cancel` after trimming whitespace and lowercasing, the runtime handles it directly before prompt assembly or model execution.
 
-There is currently **no** `!config` command.
+- the active request in that conversation is cancelled
+- the control message is not sent to the model
+- any other text, including `please stop`, is treated as a normal user message
+
+If there is no active request in that conversation, Operator replies:
+
+```text
+No active request to stop.
+```
 
 ## Conversation Behavior
 
@@ -143,7 +142,7 @@ slack:<agent-name>:<channel-id>:<root-thread-ts>
 If a second message arrives while the same conversation is still busy, Operator replies:
 
 ```text
-Still processing a request. Send `!stop` to cancel it.
+Still processing a request. Say `stop` to stop it.
 ```
 
 ## Slack Transport Tools

@@ -7,12 +7,12 @@ description: "Local AI agents for Slack, jobs, tools, and team workflows"
 
 # Agents have joined the chat.
 
-Operator is a local runtime for autonomous agents that live in Slack, use tools, remember context, and run scheduled jobs. Slack is the only transport today. Agents, jobs, skills, and memory stay as plain files under `~/.operator/`.
+Operator is a local runtime for autonomous agents that live in Slack, use tools, remember context, and run scheduled jobs. Slack is the only transport today. Agents, jobs, skills, and memory stay as plain files under the active Operator home, usually `~/.operator/`.
 
 ## Scan First
 
 - Slack-native today: DMs and `@mentions` in invited channels.
-- Local-first: state lives in `~/.operator/`, with SQLite in `~/.operator/db/operator.db`.
+- Local-first: state lives under the active Operator home, usually `~/.operator/`, with SQLite in `db/operator.db`.
 - File-driven: agents use `AGENT.md`, jobs use `JOB.md`, skills use `SKILL.md`, and memory uses markdown under `rules/` and `notes/`.
 - Team-aware: every inbound transport message is authenticated against users and roles.
 - Model-agnostic: model names use LiteLLM format like `anthropic/claude-sonnet-4-6`.
@@ -35,7 +35,7 @@ Operator is a local runtime for autonomous agents that live in Slack, use tools,
     Built-in tools, transport tools, and the behavior that matters in practice.
   </Card>
   <Card title="Slack" icon="message" href="/transports/slack">
-    Slack app setup, scopes, events, file support, and in-chat commands.
+    Slack app setup, scopes, events, file support, and stop/cancel behavior.
   </Card>
 </CardGroup>
 
