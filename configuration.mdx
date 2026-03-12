@@ -128,7 +128,7 @@ defaults:
 
 - Uses LiteLLM format: `provider/model-name`
 - The first model is preferred
-- Later models are fallbacks for live request failures
+- Later models are fallbacks for live request failures or unusable responses
 
 Operator also accepts a singular `model:` key in `defaults` or per-agent config and normalizes it into `models: [...]`. The docs use list form because that is the real fallback surface.
 

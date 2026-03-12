@@ -67,8 +67,9 @@ Rules:
 - max depth is `3`
 - without `agent=`, the child starts a fresh isolated run of the current agent
 - with `agent=`, the child starts a fresh isolated run of that target agent with its own prompt, memory, state, skills, workspace, and permissions
-- only the delegated `task` and optional `context` are passed in; parent conversation history is not inherited automatically
-- child runs cap `max_iterations` at `10`
+- only the delegated `task` and optional `context` become new child input; parent conversation history is not inherited automatically
+- delegation preserves the current run mode: chat children keep the current session/channel/thread bindings, while job children stay in job mode
+- preserved session or job context is runtime envelope only, not inherited capability permission
 
 ## Memory
 

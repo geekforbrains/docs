@@ -42,12 +42,12 @@ Operator is a local runtime for autonomous agents that live in Slack, use tools,
 ## What You Get
 
 - **Agents as teammates.** Each agent has its own prompt, workspace, model settings, permissions, and optional Slack transport.
-- **Fresh isolated sub-agent delegation.** Agents can call `spawn_agent(...)` to break work into focused child runs, including cross-agent delegation.
+- **Fresh run-mode-preserving delegation.** Agents can call `spawn_agent(...)` to break work into focused child runs, including cross-agent delegation, without copying parent conversation history.
 - **Jobs.** Scheduled markdown-defined jobs run every minute against UTC cron schedules.
 - **Users and roles.** Unknown users are rejected. Allowed agents are the union of the user's assigned roles. `admin` is built in.
 - **File-backed memory.** Rules are always injected, notes are searched on demand, and expired entries move to `trash/`.
 - **Per-agent state.** Agents can keep operational state in JSON files under `agents/<name>/state/`.
-- **Fallback chains and simple reasoning levels.** Configure `models:` as a failover list and `thinking:` as `off|low|medium|high`.
+- **Fallback chains and simple reasoning levels.** Configure `models:` as a failover list that also covers unusable model responses, and `thinking:` as `off|low|medium|high`.
 
 ## File Layout
 

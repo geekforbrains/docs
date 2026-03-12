@@ -101,11 +101,12 @@ Operator assembles the system prompt in a fixed order.
 
 ### Dynamic suffix
 
-1. transport or job context
-2. authenticated user context
-3. global, agent, and user rule memory
+1. run envelope for the current execution mode
+2. global, agent, and user rule memory
 
-Per-turn context blocks such as Slack thread snapshots, system events, and message metadata are prepended to the current `user` message instead of being baked into the stable system prompt.
+For chat runs, the run envelope includes transport prompt content plus resolved session context such as platform, user, channel/thread semantics, and timezone. For job runs, it includes job context plus generic transport prompt content when the target agent has a transport.
+
+Per-turn context blocks such as Slack thread snapshots, system events, message metadata, and the current inbound message are carried in the message list instead of being baked into the stable system prompt.
 
 Stable and dynamic sections are separated by an internal cache boundary. On Anthropic models, Operator uses that split to apply prompt caching safely.
 
@@ -159,14 +160,20 @@ Behavior depends on whether `agent=` is provided:
 - no `agent`: start a fresh isolated run of the current agent
 - `agent="other"`: start a fresh isolated run of the target agent using that agent's own prompt, memory, state, skills, workspace, and permissions
 
-Only the delegated `task`, optional `context`, and current user scope are forwarded to the child. The parent conversation history is not inherited automatically.
+Only the delegated `task` and optional `context` become new child input. The parent conversation history is not inherited automatically.
 
-Cross-agent spawns still check the current user's role-based access before running.
+Delegation preserves the current run mode:
+
+- chat-triggered child runs keep the current session envelope, including current channel/thread bindings
+- job-triggered child runs stay in job mode and do not gain synthetic user/chat context
+
+That preserved envelope is runtime context only. The child still runs with the target agent's own tools, skills, models, workspace, and permissions.
+
+Cross-agent spawns still check the current user's role-based access before running when a user context exists. Jobs do not run with a user context, so job-triggered delegation skips user-level access checks but still uses the target agent's capability limits.
 
 Operational limits:
 
 - max depth is `3`
-- sub-agent runs cap `max_iterations` at `10` even if the parent or target agent allows more
 
 The child run's initial `user` message is timestamp-rendered the same way as chat and job requests.
 

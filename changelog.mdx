@@ -8,14 +8,15 @@ description: "Release history for Operator"
 - Public docs now describe the `operator init` bootstrap flow instead of the removed `operator setup` wizard.
 - Public docs now match the current Slack transport config shape (`transport.env` and `transport.settings`), the closed-by-default permissions model, and the current memory/state CLI surface.
 - Public docs now describe configured agent keys as the runtime source of truth, with `AGENT.md` contributing prompt body and human-facing description.
-- Public docs now describe `spawn_agent(...)` as a fresh isolated child run for both same-agent and cross-agent delegation.
+- Public docs now describe `spawn_agent(...)` as a fresh child run that preserves execution mode, switches to the target agent's own capability surface, and no longer mentions the removed sub-agent `max_iterations` cap.
 - Public docs now describe `context_ratio` as full-request budgeting, including tool schemas and multimodal payloads.
+- Public docs now describe model failover as covering unusable model responses in addition to transport/provider errors.
 - Public docs now clarify that prompt/job context and job hooks use the active `OPERATOR_HOME` for the loaded config.
 - Public docs now describe Slack's exact-match `stop` / `cancel` control messages instead of the removed `!command` surface.
 - Public docs now describe the one-active-request-per-conversation rule and the current busy reply.
 - Public docs now describe runtime-owned state as following the active Operator home, not just the default `~/.operator/` path.
-
 - Public docs now describe Slack's thread-scoped, mention-gated session model, reaction-only system-event surface, exact `@Name` expansion rules, and refreshed current-channel snapshots.
+
 <Note>
   Older changelog entries describe the product as it existed in those releases. Current behavior is documented in the rest of this site.
 </Note>
