@@ -68,8 +68,7 @@
               "cli/service",
               "cli/jobs",
               "cli/skills",
-              "cli/kv",
-              "cli/memories"
+              "cli/memory"
             ]
           }
         ]

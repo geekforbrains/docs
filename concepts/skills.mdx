@@ -10,7 +10,7 @@ Skills live in `~/.operator/skills/<name>/` and are described by `SKILL.md`.
 - Operator follows the agentskills.io frontmatter rules.
 - At startup, only skill metadata is injected into the prompt.
 - Agents use `read_skill` for progressive disclosure and `run_skill` for skill scripts.
-- Missing bundled skills are auto-installed on `operator init` and runtime startup.
+- There are no bundled skills in current Operator.
 - Skill permissions are separate from tool permissions.
 
 ## Directory Layout
@@ -109,24 +109,13 @@ Operator surfaces missing env vars in:
 - `operator skills list`
 - the injected skills prompt shown to agents
 
-## Bundled Skills
-
-Operator currently ships with:
-
-| Skill | Purpose |
-| --- | --- |
-| `job-creator` | teaches agents how to create and manage scheduled jobs |
-| `skill-creator` | teaches agents how to create and refine skills themselves |
-
-You can restore bundled skill directories with the [Skills CLI](/cli/skills).
-
 ## Permissions
 
 ```yaml
 agents:
   operator:
     permissions:
-      skills: [job-creator, skill-creator]
+      skills: [pr-reviewer]
 ```
 
 If `permissions.skills` is set, only the listed skills are available to that agent.
@@ -135,13 +124,12 @@ This is independent from tool permissions. An agent might be allowed to see a sk
 
 ## Creating and Updating Skills
 
-You have three supported paths:
+You have two supported paths:
 
 1. edit files directly in `~/.operator/skills/`
-2. use the `manage_skill` tool in a live agent run
-3. restore bundled skills with `operator skills reset`
+2. use the deterministic runtime tools `create_skill`, `update_skill`, `delete_skill`, and `list_skills`
 
-The CLI does **not** create or update arbitrary skills. It only lists skills and resets bundled ones.
+The CLI lists discoverable skills, but it does not create, update, or reset them.
 
 ## Path Guidance
 

@@ -9,7 +9,6 @@ The `operator` command is both the long-running runtime entrypoint and the manag
 
 - Running `operator` with no subcommand starts the runtime.
 - Most CLI commands work without the background service running.
-- Agent-aware commands resolve the agent from `--agent`, then `OPERATOR_AGENT`, then the default agent in config.
 - `operator tools` shows built-in tools only. Transport tools are runtime-only.
 
 ## Top-Level Commands
@@ -18,7 +17,6 @@ The `operator` command is both the long-running runtime entrypoint and the manag
 | --- | --- |
 | `operator` | start the runtime |
 | `operator init` | scaffold `~/.operator/` |
-| `operator setup` | guided onboarding |
 | `operator config` | print resolved config as JSON |
 | `operator agents` | list configured agents |
 | `operator tools` | list built-in tools |
@@ -31,9 +29,8 @@ The `operator` command is both the long-running runtime entrypoint and the manag
 | `operator user ...` | users, identities, and roles |
 | `operator service ...` | launchd/systemd service management |
 | `operator job ...` | inspect, enable/disable, and manually run jobs |
-| `operator skills ...` | list skills and reset bundled skills |
-| `operator kv ...` | inspect the per-agent key-value store |
-| `operator memories ...` | inspect stored memories |
+| `operator skills ...` | list discoverable skills and env status |
+| `operator memory ...` | inspect and reindex file-backed memory |
 
 ## Common Flows
 
@@ -41,12 +38,6 @@ The `operator` command is both the long-running runtime entrypoint and the manag
 
 ```sh
 pip install operator-ai
-operator setup --run
-```
-
-### Manual scaffold
-
-```sh
 operator init
 operator user add gavin --role admin slack U123ABC45
 operator
@@ -69,21 +60,11 @@ operator service start
 operator service status
 ```
 
-## Agent Resolution
-
-Commands like `operator kv ...` need an agent name. Resolution order is:
-
-1. explicit `--agent`
-2. `OPERATOR_AGENT`
-3. first configured agent in `operator.yaml`
-
-If config is missing and you did not provide `--agent`, the command exits with an error.
-
 ## Reference Pages
 
 <CardGroup cols={2}>
   <Card title="Runtime Commands" icon="terminal" href="/cli/runtime">
-    `operator`, `init`, `setup`, `config`, `agents`, `tools`, and `logs`.
+    `operator`, `init`, `config`, `agents`, `tools`, and `logs`.
   </Card>
   <Card title="Users" icon="users" href="/cli/users">
     Add users, link identities, inspect roles, and remove users.
@@ -95,12 +76,9 @@ If config is missing and you did not provide `--agent`, the command exits with a
     Inspect, enable, disable, and manually run jobs.
   </Card>
   <Card title="Skills" icon="wand-magic-sparkles" href="/cli/skills">
-    List skills and reset bundled skills.
+    List discoverable skills and missing env vars.
   </Card>
-  <Card title="KV Store" icon="database" href="/cli/kv">
-    Read and write the per-agent key-value store.
-  </Card>
-  <Card title="Memories" icon="brain" href="/cli/memories">
-    Inspect stored memories and memory counts by scope.
+  <Card title="Memory" icon="brain" href="/cli/memory">
+    Inspect file-backed memories and rebuild the search index.
   </Card>
 </CardGroup>

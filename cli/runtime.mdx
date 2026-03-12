@@ -1,6 +1,6 @@
 ---
 title: "Runtime Commands"
-description: "Top-level operator commands for setup, runtime, config, tools, and logs"
+description: "Top-level operator commands for bootstrap, runtime, config, tools, and logs"
 ---
 
 This page covers the top-level commands outside the grouped subcommands.
@@ -15,10 +15,11 @@ What it does:
 
 - loads `~/.operator/operator.yaml`
 - loads `runtime.env_file` if configured
-- installs any missing bundled skills
+- ensures the full `~/.operator/` layout exists
+- builds the memory search index from files
 - starts the configured transports
 - starts the job runner
-- starts memory workers if enabled
+- starts the hourly memory expiry sweep
 
 The runtime requires at least one configured transport. A headless-only config cannot start the long-running service.
 
@@ -26,6 +27,7 @@ The runtime requires at least one configured transport. A headless-only config c
 
 ```sh
 operator init
+operator init --force
 ```
 
 Scaffolds:
@@ -34,48 +36,15 @@ Scaffolds:
 - `.env`
 - `SYSTEM.md`
 - `agents/operator/AGENT.md`
-- `agents/operator/workspace/`
-- `jobs/`
-- `skills/`
-- `shared/`
-- `logs/`
-- `state/`
+- the full workspace, memory, state, jobs, skills, shared, db, and logs directories
 
 Behavior:
 
 - safe to re-run
-- existing files are not overwritten
-- installs bundled skills that do not already exist
+- existing `.env` and `AGENT.md` files are preserved
+- existing `operator.yaml` is replaced only after confirmation, unless `--force` is used
 
-## `operator setup`
-
-```sh
-operator setup
-operator setup --run
-```
-
-Guided onboarding for:
-
-- provider selection
-- timezone
-- provider API key
-- Slack bot/app tokens
-- first admin username
-- first Slack identity
-
-Useful flags:
-
-| Flag | Meaning |
-| --- | --- |
-| `--provider` | `anthropic`, `openai`, or `gemini` |
-| `--timezone` | explicit IANA timezone |
-| `--username` | admin username to create |
-| `--api-key` | provider key to persist |
-| `--slack-bot-token` | bot token |
-| `--slack-app-token` | app token |
-| `--slack-user` | Slack user ID |
-| `--force` | re-prompt secrets even if already present |
-| `--run` | start the runtime after setup |
+After scaffolding, the CLI tells you to edit `operator.yaml`, add secrets to `.env`, and create your first admin user.
 
 ## `operator config`
 
@@ -88,10 +57,10 @@ Prints the resolved config as JSON after validation and env-file loading.
 Use this to confirm:
 
 - agent inheritance
-- runtime timezone
 - role definitions
-- memory settings
-- transport env var names
+- permission groups
+- transport config normalization
+- env file loading
 
 ## `operator agents`
 
@@ -117,7 +86,7 @@ operator tools
 
 Lists the registered built-in tools.
 
-Important caveat: this command does **not** include transport tools like Slack's `list_channels`, `read_channel`, or `read_thread`. Those are added only during live runtime execution.
+Important caveat: this command does **not** include transport tools like Slack's `slack_list_channels`, `slack_read_channel`, or `slack_read_thread`. Those are added only during live runtime execution.
 
 ## `operator logs`
 
@@ -144,7 +113,7 @@ If the `operator` script is not on your `PATH`, the package also supports:
 
 ```sh
 python3 -m operator_ai
-python3 -m operator_ai setup --run
+python3 -m operator_ai init
 ```
 
 ## Related Docs

@@ -1,33 +1,55 @@
 ---
 title: "Memory"
-description: "Retention-aware memory, recall, harvesting, cleaning, and debugging"
+description: "File-backed rules, notes, search, expiry, and debugging"
 ---
 
-Operator memory is backed by SQLite plus `sqlite-vec`.
+Operator memory is file-backed. Markdown files are the source of truth, and SQLite is used only for search indexing.
 
 ## Scan First
 
-- Runtime memory is only active when `memory.harvester.enabled` or `memory.cleaner.enabled` is `true`.
-- Automatic recall happens per live request, not by mutating stored history.
+- Memory lives in files under `~/.operator/memory/` and `~/.operator/agents/<name>/memory/`.
+- Rules are always injected into the system prompt.
+- Notes are searched on demand.
 - `user` scope is available only in private chat contexts.
 - Jobs use `agent` and `global` memory only.
-- `candidate` and `durable` are retention classes; `pinned` is an injection policy.
+- Expired notes and forgotten items move to `trash/` instead of being hard-deleted.
 
-<Warning>
-  If both `memory.harvester.enabled` and `memory.cleaner.enabled` are `false`, the runtime does not configure memory tools or semantic recall. The `operator memories` CLI still reads the stored memory tables directly.
-</Warning>
+## Directory Layout
 
-## How Recall Works
+```text
+~/.operator/
+├── memory/
+│   ├── global/
+│   │   ├── rules/
+│   │   ├── notes/
+│   │   └── trash/
+│   └── users/
+│       └── <user>/
+│           ├── rules/
+│           ├── notes/
+│           └── trash/
+└── agents/
+    └── <agent>/
+        └── memory/
+            ├── rules/
+            ├── notes/
+            └── trash/
+```
 
-For a chat turn with memory enabled:
+Each memory file is markdown with minimal frontmatter:
 
-1. Operator embeds the latest user message.
-2. It searches the allowed scopes.
-3. Results are filtered by `memory.inject_min_relevance`.
-4. The best matches up to `memory.inject_top_k` are injected as a request-only context snapshot.
-5. Pinned memories are appended separately to the system prompt.
+- `created_at`
+- `updated_at`
+- optional `expires_at`
 
-This injected material is not written back into the persisted conversation.
+## Rules vs Notes
+
+| Kind | Behavior | Best for |
+| --- | --- | --- |
+| `rules/` | always injected | short standing instructions and durable conventions |
+| `notes/` | searched on demand | facts, references, and reusable context that should not bloat every prompt |
+
+Rules do not have TTLs. Notes can optionally expire.
 
 ## Scopes
 
@@ -39,156 +61,98 @@ This injected material is not written back into the persisted conversation.
 
 Public channels never expose `user` scope.
 
-## Retention vs Pinning
-
-| Property | Meaning | Expiry |
-| --- | --- | --- |
-| `candidate` | short-lived but reusable context | expires after `candidate_ttl_days` |
-| `durable` | long-lived reusable fact | does not auto-expire |
-| `pinned` | always inject this memory | does not auto-expire |
-
-Pinned memories are separate from retention. A pinned durable memory stays durable. A pinned candidate memory is effectively preserved because pinning disables expiry.
-
 ## Saving Behavior
 
-When memory is enabled, `save_memory(...)`:
+Memory tools use deterministic keys. Saving to an existing key replaces the file in place and updates its timestamps.
 
-- embeds the content
-- deduplicates against the closest existing memory in the same scope
-- merges pin/retention state when a near-duplicate already exists
-- enforces `max_memories` per scope
+### `save_rule`
 
-That means repeated saves of essentially the same fact often update an existing row instead of creating a new one.
+```text
+save_rule("response-style", "Lead with findings and keep summaries short.", scope="agent")
+```
 
-## Harvester
+Use rules for short guidance that should shape every interaction.
 
-The harvester is a scheduled LLM worker.
+### `save_note`
 
-It:
+```text
+save_note("release-window", "The next release goes out on Fridays at 16:00 UTC.", scope="agent")
+save_note("launch-checklist", "Reminder to post to #announce after deploy.", scope="user", ttl="7d")
+```
 
-- scans recently updated conversations
-- looks only at user and assistant text
-- extracts reusable facts
-- classifies them as `candidate` or `durable`
-- ignores weak or obviously ephemeral information
+Notes support optional TTLs:
 
-It is intentionally conservative and prefers extracting nothing over storing noise.
+- `30m`
+- `1h`
+- `3d`
+- `2w`
 
-## Cleaner
+## Search
 
-The cleaner is another scheduled LLM worker.
+`search_notes(query, scope="agent")` searches note files through the SQLite index at `~/.operator/db/memory_index.db`.
 
-It processes scopes independently and may:
+Search behavior:
 
-- rewrite wording for clarity
-- split compound memories into separate facts
-- merge duplicates
-- delete stale or contradicted memories
+- FTS5 is always used for text search
+- if `defaults.embeddings` is configured and `sqlite-vec` is installed, Operator also stores vectors for semantic retrieval
+- the index is rebuilt from files, so the files remain the source of truth
 
-Pinned memories may not be deleted by the cleaner.
+## Forgetting And Expiry
 
-## Good vs Bad Memories
+These tools move memory files to `trash/`:
 
-Good durable memories:
+- `forget_rule(key, scope="...")`
+- `forget_note(key, scope="...")`
 
-- stable user preferences
-- standing team conventions
-- reusable project facts
-- long-lived agent instructions
-
-Good candidate memories:
-
-- temporary but reusable context likely to matter again soon
-
-Bad memories:
-
-- one-off tasks
-- current troubleshooting state
-- branch names
-- meeting logistics
-- “right now” status updates
+Expired notes are also swept to `trash/` automatically by the background runtime once per hour.
 
 ## Tool Surface
 
-When runtime memory is enabled, agents can use:
+Agents can use:
 
 | Tool | Use it for |
 | --- | --- |
-| `save_memory` | store a fact with scope and retention |
-| `search_memories` | search semantically relevant memories |
-| `forget_memory` | delete a specific memory |
-| `list_memories` | list currently visible memories |
+| `save_rule` | create or replace a standing rule by key |
+| `save_note` | create or replace a searchable note by key |
+| `search_notes` | search notes by key and content |
+| `list_rules` | list active rules in a scope |
+| `list_notes` | list active notes in a scope |
+| `read_note` | read the full content of a note |
+| `forget_rule` | move a rule to trash |
+| `forget_note` | move a note to trash |
 
 Example calls:
 
 ```text
-save_memory("Use Slack thread replies for daily summaries", scope="agent", retention="durable")
-save_memory("Release checklist is active this week", scope="agent", retention="candidate")
-save_memory("Always include links in the handoff", scope="agent", retention="durable", pinned=true)
+save_rule("daily-summary-style", "Use a short teaser plus a threaded deep dive.", scope="agent")
+save_note("slack-app-id", "A1234567890", scope="global")
+search_notes("release schedule", scope="agent")
+list_rules(scope="agent")
+read_note("slack-app-id", scope="global")
 ```
-
-If runtime memory is disabled, those tools still exist in the tool registry but return an error like `memory system not configured`.
-
-## Configuration Knobs
-
-```yaml
-memory:
-  embed_model: "openai/text-embedding-3-small"
-  embed_dimensions: 1536
-  max_memories: 10000
-  inject_top_k: 5
-  inject_min_relevance: 0.1
-  candidate_ttl_days: 14
-  harvester:
-    enabled: true
-    schedule: "*/30 * * * *"
-    models:
-      - "openai/gpt-4.1-mini"
-      - "anthropic/claude-sonnet-4-6"
-  cleaner:
-    enabled: true
-    schedule: "0 3 * * *"
-    models:
-      - "openai/gpt-4.1-mini"
-```
-
-Tuning guidelines:
-
-- lower `inject_top_k` if too much memory context is injected
-- raise `inject_min_relevance` if recall feels noisy
-- raise `candidate_ttl_days` if candidate memories expire too quickly
 
 ## Debugging
 
 Start with the CLI:
 
 ```sh
-operator memories --scope agent --scope-id operator
-operator memories stats
+operator memory list agent:operator
+operator memory search "release schedule" --scope agent:operator
+operator memory index
 ```
 
-Then inspect logs:
-
-```sh
-operator logs -f | rg 'memory recall:|memory injection:'
-```
-
-Typical log lines:
+Then inspect the files directly:
 
 ```text
-INFO  [operator:abc123] memory recall: requested_top_k=5 raw_matches=4 filtered_matches=2 returned=2 min_relevance=0.100
-INFO  [operator:abc123] memory injection: injected=2 retention_mix=candidate=1 durable=1
+~/.operator/agents/operator/memory/
+~/.operator/memory/global/
+~/.operator/memory/users/<user>/
 ```
 
-Those tell you:
-
-- how many matches vector search found
-- how many survived the relevance filter
-- how many were actually injected
-- whether the injected mix skewed candidate or durable
+If you edit memory files by hand, run `operator memory index` so the search index catches up.
 
 ## Related Docs
 
-- [Configuration](/configuration#memory)
-- [Memories CLI](/cli/memories)
+- [Configuration](/configuration)
+- [Memory CLI](/cli/memory)
 - [Jobs](/concepts/jobs)

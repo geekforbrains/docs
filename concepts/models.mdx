@@ -63,15 +63,15 @@ If the current model does not support reasoning controls, Operator omits the par
 
 ## Cross-Provider Safety
 
-When a response includes provider-specific reasoning metadata, Operator strips that metadata from assistant history before the next model call. This is what keeps Anthropic-to-OpenAI or OpenAI-to-other-provider fallbacks from breaking on incompatible history payloads.
+When a response includes provider-specific reasoning metadata, Operator strips that metadata from assistant history before the next model call. This keeps Anthropic-to-OpenAI or OpenAI-to-other-provider fallbacks from breaking on incompatible history payloads.
 
 ## Inheritance Rules
 
 | Execution type | Models | Thinking | Other execution settings |
 | --- | --- | --- | --- |
-| Chat | agent override or `defaults.models` | agent override or `defaults.thinking` | `max_iterations`, `context_ratio`, `max_output_tokens` resolve the same way |
-| `spawn_agent()` without `agent=` | inherit current run context | inherit current run context | inherit current run context |
-| `spawn_agent(agent="other")` | switch to target agent | switch to target agent | switch to target agent |
+| Chat | agent override or `defaults.models` | agent override or `defaults.thinking` | `max_iterations`, `context_ratio`, and `max_output_tokens` resolve the same way |
+| `spawn_agent()` without `agent=` | inherit current run context | inherit current run context | inherit current run context, but sub-agent `max_iterations` is capped at `10` |
+| `spawn_agent(agent="other")` | switch to target agent | switch to target agent | switch to target agent config, but sub-agent `max_iterations` is capped at `10` |
 | Scheduled job | `job.model` or resolved agent models | resolved agent thinking | resolved agent `context_ratio` and `max_output_tokens` |
 
 ## Jobs
@@ -95,7 +95,7 @@ If you need a different thinking level for a job, point the job at a different a
 
 - if configured: Operator uses your explicit value
 - if `null`: Operator asks LiteLLM for the model's max output size and uses that when available
-- if LiteLLM cannot resolve a max: the param is omitted
+- if LiteLLM cannot resolve a max: the parameter is omitted
 
 ## `context_ratio`
 
@@ -103,7 +103,7 @@ If you need a different thinking level for a job, point the job at a different a
 
 - higher values keep more history
 - lower values reduce token usage
-- `0.0` disables trimming logic and sends the full stored history
+- the value must be greater than `0` and at most `1`
 
 The system prompt and latest user exchange are preserved first; older exchanges are the first thing dropped.
 

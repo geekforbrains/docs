@@ -10,20 +10,20 @@ Operator registers a built-in tool set and may add transport-specific tools at r
 - Permissions can hide tools from specific agents.
 - Some tools require runtime context to work correctly.
 - Transport tools only appear for the active transport.
-- `run_shell` is powerful and unaffected by sandboxing.
-- Memory tools need runtime memory to be enabled.
+- `run_shell` is powerful. Remove it with permissions if an agent should not have shell access.
+- `operator tools` lists built-in tools only, not transport tools.
 
 ## Tool Availability Rules
 
 There are three separate gates:
 
 1. **Registration:** built-in tools are registered globally
-2. **Permissions:** `permissions.tools` may hide them from an agent
-3. **Runtime context:** some tools still need a transport, memory store, or agent context
+2. **Permissions:** `permissions.tools` and `permissions.skills` may hide them from an agent
+3. **Runtime context:** some tools still need a transport, memory store, or authenticated user context
 
-Example: `save_memory` is registered, but it returns `memory system not configured` if runtime memory is off.
+Example: `send_message` is registered, but it returns an error if the current run does not have a transport.
 
-## Shell and Files
+## Shell, Files, and Web
 
 | Tool | Notes |
 | --- | --- |
@@ -31,27 +31,14 @@ Example: `save_memory` is registered, but it returns `memory system not configur
 | `read_file(path)` | reads a file, capped at 1 MB / 16 KB returned output |
 | `write_file(path, content)` | writes a file, creating parent directories |
 | `list_files(path=".", max_depth=2)` | lists non-hidden files and directories |
+| `web_fetch(url, offset=0, limit=16000)` | fetches text-friendly web content |
 
 Important behavior:
 
-- file paths resolve relative to the agent workspace
-- sandboxed agents cannot escape the workspace with file tools
-- unsandboxed agents may use absolute paths or parent traversal
-- `run_shell` is not sandboxed, only rooted at the workspace as `cwd`
-
-## Web
-
-| Tool | Notes |
-| --- | --- |
-| `web_fetch(url, offset=0, limit=16000)` | fetches text-friendly content and paginates large responses |
-
-`web_fetch` prefers:
-
-1. a `.md` variant of the URL when available
-2. clean text extraction from HTML
-3. raw text for already textual content
-
-It only returns text-like content. Unsupported binary types return an error string.
+- file paths resolve relative to the agent workspace by default
+- absolute paths are still allowed
+- `send_file` uses the same path resolution as file tools
+- `run_shell` and `run_skill` run with the workspace as `cwd`
 
 ## Messaging
 
@@ -65,7 +52,7 @@ Defaults:
 - if `channel` is omitted, use the current conversation channel
 - if `thread_id` is omitted, use the current conversation thread
 
-`send_file` uses the same path-resolution and sandbox rules as file tools and rejects files over 50 MB.
+`send_file` rejects files over 50 MB.
 
 ## Sub-Agents
 
@@ -78,51 +65,61 @@ Rules:
 - max depth is `3`
 - without `agent=`, the child inherits the current run context
 - with `agent=`, the child switches to that agent's config
+- child runs cap `max_iterations` at `10`
 
 ## Memory
 
 | Tool | Notes |
 | --- | --- |
-| `save_memory(content, scope="user", retention="durable", pinned=false)` | stores a memory |
-| `search_memories(query, scope="", top_k=5)` | semantic lookup |
-| `forget_memory(memory_id)` | deletes a memory |
-| `list_memories(scope="", limit=50, offset=0)` | lists visible memories |
+| `save_rule(key, content, scope="agent")` | store standing guidance |
+| `save_note(key, content, scope="agent", ttl="")` | store searchable durable or time-limited knowledge |
+| `search_notes(query, scope="agent")` | search note memories |
+| `list_rules(scope="agent")` | list active rules |
+| `list_notes(scope="agent", limit=50, offset=0)` | list active notes |
+| `read_note(key, scope="agent")` | read one note in full |
+| `forget_rule(key, scope="agent")` | move a rule to trash |
+| `forget_note(key, scope="agent")` | move a note to trash |
 
-These tools require runtime memory to be active. In public channels, `user` scope is blocked.
+Memory rules:
 
-## Key-Value Store
+- `user` scope only works in private conversations
+- jobs only use `agent` and `global` memory
+- search reads from the SQLite memory index, which is rebuilt from files
+
+## State
 
 | Tool | Notes |
 | --- | --- |
-| `kv_get(key, namespace="")` | returns a value or `[not found]` |
-| `kv_set(key, value, namespace="", ttl_hours=0)` | stores a value with optional TTL |
-| `kv_delete(key, namespace="")` | deletes a key |
-| `kv_list(namespace="", prefix="")` | lists keys for the current agent |
+| `get_state(key)` | read JSON state by key |
+| `set_state(key, value)` | write a scalar state value |
+| `append_state(key, value, max_items=0)` | append to a list state key |
+| `pop_state(key)` | remove and return the oldest item from a list |
+| `list_state()` | list all state keys for the current agent |
+| `delete_state(key)` | delete a state key |
 
-KV data is always scoped to the current agent.
+State lives in JSON files under `~/.operator/agents/<agent>/state/`.
 
-Use namespaces for grouping operational state like:
+Use state for operational data like:
 
 - cursors
-- watermarks
-- job checkpoints
+- checkpoints
 - dedupe keys
+- rolling queues
 
 ## Jobs and Skills
 
 | Tool | Notes |
 | --- | --- |
-| `manage_job(action, name="", config="")` | list, create, update, delete, enable, disable |
-| `manage_skill(action, name="", config="")` | list, create, update, delete |
+| `create_job` / `update_job` / `delete_job` | manage `jobs/<name>/JOB.md` |
+| `enable_job` / `disable_job` / `list_jobs` | control job state |
+| `create_skill` / `update_skill` / `delete_skill` / `list_skills` | manage `skills/<name>/SKILL.md` |
 | `read_skill(skill, path="")` | read `SKILL.md`, references, or assets |
 | `run_skill(skill, command, timeout=120)` | execute a skill-related command |
 
 Key behavior:
 
-- `manage_job create/update` expects full `JOB.md` content
-- `manage_skill create/update` expects full `SKILL.md` content
-- `manage_job` validates cron, agent name, and hook path safety
-- `manage_job create` can scaffold placeholder hook scripts
+- job and skill management tools take structured arguments, not raw markdown blobs
+- `create_job` and `update_job` can scaffold placeholder hook scripts
 - `run_skill` uses `shell=False`, strips transport secrets, preserves `$OPERATOR_HOME`, and sets `SKILL_DIR`
 
 ## User Management
@@ -130,14 +127,13 @@ Key behavior:
 | Tool | Notes |
 | --- | --- |
 | `manage_users(action, username="", role="", transport="", external_id="")` | runtime user and role management |
+| `set_timezone(timezone)` | set the current user's timezone |
 
 `manage_users` is role-gated:
 
 - requires the `admin` role
 - stays visible to the LLM
 - returns an error if the active user is not an admin
-
-Its `add` action creates the user and assigns a role. Identity linking is a separate `link` action.
 
 ## Transport Tools
 
@@ -147,16 +143,19 @@ Slack currently adds:
 
 | Tool | Notes |
 | --- | --- |
-| `list_channels()` | show cached postable channels |
-| `read_channel(channel, count=20)` | fetch recent channel messages |
-| `read_thread(channel, thread_id, count=50)` | fetch thread replies |
+| `slack_find_users(query="", limit=20, linked_only=false)` | find Slack users by display name, handle, Slack ID, email, or linked Operator username |
+| `slack_list_channels(query="")` | show cached postable channels |
+| `slack_read_channel(channel, count=20)` | fetch recent channel messages |
+| `slack_read_thread(channel, thread_id, count=50)` | fetch thread replies |
+| `slack_add_reaction(channel, message_id, emoji)` | add an emoji reaction |
+| `slack_remove_reaction(channel, message_id, emoji)` | remove an emoji reaction |
 
 See [Slack](/transports/slack) for the Slack-specific runtime behavior.
 
 ## Choosing The Right Tool
 
-- use **KV** for operational state
-- use **memory** for reusable human/project facts
+- use **state** for operational counters, cursors, and queues
+- use **memory** for reusable human or project facts
 - use **jobs** for recurring autonomous workflows
 - use **skills** for reusable instructions and scripts
 - use **sub-agents** when a task benefits from isolation or a different agent persona

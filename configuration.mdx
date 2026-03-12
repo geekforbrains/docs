@@ -8,17 +8,15 @@ Runtime config lives at `~/.operator/operator.yaml`.
 ## Scan First
 
 - `defaults.models` is required and must contain at least one LiteLLM model string.
-- `runtime.timezone` must be a valid IANA timezone like `America/Vancouver`.
 - `admin` is a built-in role and cannot be defined under `roles:`.
-- File sandboxing defaults to `true` per agent.
-- Memory is only active when `memory.harvester.enabled` or `memory.cleaner.enabled` is `true`.
+- Agent permissions are closed by default. If an agent has no `permissions` block, it gets no tools and no skills.
 - Slack is the only supported `transport.type` right now.
+- Memory is file-backed. Optional embeddings are configured under `defaults.embeddings`.
 
 ## Full Example
 
 ```yaml
 runtime:
-  timezone: "America/Vancouver"
   env_file: ".env"
   show_usage: false
   reject_response: ignore
@@ -31,52 +29,56 @@ defaults:
   max_iterations: 25
   context_ratio: 0.5
   max_output_tokens: null
+  hook_timeout: 30
+  embeddings:
+    model: "openai/text-embedding-3-small"
+    dimensions: 1536
+
+permission_groups:
+  files:
+    - read_file
+    - write_file
+    - list_files
+  web:
+    - web_fetch
+  agents:
+    - spawn_agent
 
 agents:
   operator:
-    sandbox: false
+    permissions:
+      tools: "*"
+      skills: "*"
     transport:
       type: slack
-      bot_token_env: SLACK_BOT_TOKEN
-      app_token_env: SLACK_APP_TOKEN
+      env:
+        bot_token: SLACK_BOT_TOKEN
+        app_token: SLACK_APP_TOKEN
+      settings:
+        include_archived_channels: false
+        inject_channels_into_prompt: true
+        inject_users_into_prompt: true
+        expand_mentions: true
 
   researcher:
     models:
       - "openai/o3"
     thinking: high
     permissions:
-      tools: [web_fetch, read_skill, run_skill, search_memories, spawn_agent]
-      skills: [skill-creator]
+      tools: [@files, @web, run_shell, read_skill, run_skill, @agents]
+      skills: [pr-reviewer]
 
 roles:
   team:
     agents: [operator, researcher]
   guest:
-    agents: [operator]
-
-memory:
-  embed_model: "openai/text-embedding-3-small"
-  embed_dimensions: 1536
-  max_memories: 10000
-  inject_top_k: 5
-  inject_min_relevance: 0.1
-  candidate_ttl_days: 14
-  harvester:
-    enabled: true
-    schedule: "*/30 * * * *"
-    models:
-      - "openai/gpt-4.1-mini"
-  cleaner:
-    enabled: false
-    schedule: ""
-    models: []
+    agents: []
 ```
 
 ## `runtime`
 
 ```yaml
 runtime:
-  timezone: "America/Vancouver"
   env_file: ".env"
   show_usage: false
   reject_response: ignore
@@ -84,20 +86,13 @@ runtime:
 
 | Field | Default | What it does |
 | --- | --- | --- |
-| `timezone` | `UTC` | Used for cron matching, Slack timestamp formatting, and rendering `user` message creation timestamps into model input |
 | `env_file` | `null` | Optional `.env` file path. Relative paths resolve from the config file directory |
 | `show_usage` | `false` | Sends a usage summary after each completed chat response |
 | `reject_response` | `ignore` | Unknown or unauthorized user behavior: `ignore` or `announce` |
 
-### `runtime.timezone`
-
-Operator uses the configured timezone in three places:
-
-1. Cron matching for scheduled jobs.
-2. Slack timestamp formatting.
-3. Rendering `user` message creation timestamps right before each live model call, for example `[Monday, 2026-03-09T09:22:40-07:00]`.
-
-This applies to chat turns, scheduled jobs, and sub-agent task messages. Older stored messages without `created_at` are left unstamped.
+<Note>
+  There is no `runtime.timezone` setting in current Operator. Timezone is stored on each user record and can be set in chat with `set_timezone("America/Vancouver")`. Live user-message timestamps render in that user timezone when available. Jobs run without a user context and therefore render in UTC.
+</Note>
 
 ### `runtime.env_file`
 
@@ -115,6 +110,8 @@ defaults:
   max_iterations: 25
   context_ratio: 0.5
   max_output_tokens: null
+  hook_timeout: 30
+  embeddings: null
 ```
 
 | Field | Default | What it does |
@@ -122,12 +119,10 @@ defaults:
 | `models` | required | Fallback chain of LiteLLM model IDs |
 | `thinking` | `off` | Reasoning level: `off`, `low`, `medium`, `high` |
 | `max_iterations` | `25` | Max model/tool loop iterations |
-| `context_ratio` | `0.5` | Fraction of the model input window Operator is willing to spend on message history |
+| `context_ratio` | `0.5` | Fraction of the model input window Operator is willing to spend on message history. Must be greater than `0` and at most `1`. |
 | `max_output_tokens` | `null` | Per-call output cap. `null` means “use the model max when LiteLLM can resolve it” |
-
-<Note>
-  The starter file written by `operator init` sets `defaults.max_iterations: 50`. The model-level default, if you omit the field entirely, is `25`.
-</Note>
+| `hook_timeout` | `30` | Timeout in seconds for job prerun/postrun hooks |
+| `embeddings` | `null` | Optional embedding model config for semantic note search via `sqlite-vec` |
 
 ### `models`
 
@@ -135,7 +130,7 @@ defaults:
 - The first model is preferred
 - Later models are fallbacks for live request failures
 
-Operator also accepts a singular `model:` key in the `defaults` or per-agent config and normalizes it into `models: [...]`. The docs use list form because that is the real fallback surface.
+Operator also accepts a singular `model:` key in `defaults` or per-agent config and normalizes it into `models: [...]`. The docs use list form because that is the real fallback surface.
 
 ### `context_ratio`
 
@@ -146,7 +141,48 @@ When history exceeds the model budget, Operator:
 3. drops older exchanges first
 4. shortens older non-user content if needed
 
-Set `0` to effectively disable history trimming logic for models where LiteLLM can report token limits.
+There is no special `0` value. `context_ratio` must be greater than `0`.
+
+### `embeddings`
+
+```yaml
+defaults:
+  embeddings:
+    model: "openai/text-embedding-3-small"
+    dimensions: 1536
+```
+
+When configured, Operator builds vector embeddings for note memories and combines them with the SQLite FTS5 index under `~/.operator/db/memory_index.db`.
+
+| Field | Default | Notes |
+| --- | --- | --- |
+| `model` | required | LiteLLM embedding model ID |
+| `dimensions` | `1536` | Vector size for the sqlite-vec table |
+
+If `sqlite-vec` is not installed, Operator logs a warning and continues with FTS-only note search.
+
+## `permission_groups`
+
+```yaml
+permission_groups:
+  files:
+    - read_file
+    - write_file
+    - list_files
+  web:
+    - web_fetch
+```
+
+Permission groups are named bundles you can reference as `@group` in an agent's permission lists.
+
+```yaml
+agents:
+  researcher:
+    permissions:
+      tools: [@files, @web, run_shell]
+```
+
+Unknown groups log a warning and are ignored.
 
 ## `agents`
 
@@ -159,17 +195,17 @@ agents:
     max_iterations: 40
     context_ratio: 0.4
     max_output_tokens: 4096
-    sandbox: true
     transport:
       type: slack
-      bot_token_env: SLACK_BOT_TOKEN
-      app_token_env: SLACK_APP_TOKEN
+      env:
+        bot_token: SLACK_BOT_TOKEN
+        app_token: SLACK_APP_TOKEN
     permissions:
       tools: [read_file, list_files, web_fetch]
-      skills: [job-creator]
+      skills: [pr-reviewer]
 ```
 
-Each agent can override any of the `defaults` execution knobs plus transport, sandbox, and permissions.
+Each agent can override any of the `defaults` execution knobs plus transport and permissions.
 
 | Field | Default | Notes |
 | --- | --- | --- |
@@ -178,46 +214,47 @@ Each agent can override any of the `defaults` execution knobs plus transport, sa
 | `max_iterations` | inherit from `defaults.max_iterations` | Max tool loop depth |
 | `context_ratio` | inherit from `defaults.context_ratio` | History budget fraction |
 | `max_output_tokens` | inherit from `defaults.max_output_tokens` | Output token cap |
-| `sandbox` | `true` | Restricts file tools to the workspace when enabled |
 | `transport` | none | Makes the agent reachable from Slack |
 | `permissions` | none | Optional flat allow-lists for tools and skills |
 
 Agents without a `transport` block are headless: they can still be used for jobs and `spawn_agent(...)`, but they are not directly reachable in chat.
 
 <Warning>
-  The `operator` runtime itself still requires at least one agent with a transport. A config containing only headless agents will not start the long-running service.
+  The long-running `operator` service still requires at least one agent with a transport. A config containing only headless agents will not start the runtime.
 </Warning>
-
-### `sandbox`
-
-- `true`: `read_file`, `write_file`, `list_files`, and `send_file` cannot escape the workspace
-- `false`: file tools may use absolute paths or paths outside the workspace
-
-`run_shell` is not sandboxed. Use `permissions.tools` if you need to remove shell access.
 
 ### `permissions`
 
 ```yaml
 permissions:
-  tools: [read_file, web_fetch, spawn_agent]
-  skills: [job-creator]
+  tools: [@files, web_fetch, spawn_agent]
+  skills: [pr-reviewer]
 ```
 
 | Value | Meaning |
 | --- | --- |
-| omitted | unrestricted |
+| omitted | deny all |
+| `null` | deny all |
 | `"*"` | unrestricted |
 | list | only the listed names are available |
 
-Permissions are allow-lists. Unlisted tools and skills are removed from the LLM-visible tool/skill surface.
+Permissions are allow-lists. Unlisted tools and skills are removed from the LLM-visible tool and skill surface.
+
+Tool permissions and skill permissions are independent.
 
 ## `transport`
 
 ```yaml
 transport:
   type: slack
-  bot_token_env: SLACK_BOT_TOKEN
-  app_token_env: SLACK_APP_TOKEN
+  env:
+    bot_token: SLACK_BOT_TOKEN
+    app_token: SLACK_APP_TOKEN
+  settings:
+    include_archived_channels: false
+    inject_channels_into_prompt: true
+    inject_users_into_prompt: true
+    expand_mentions: true
 ```
 
 `transport.type` must currently be `slack`.
@@ -225,8 +262,12 @@ transport:
 | Field | Required | Notes |
 | --- | --- | --- |
 | `type` | yes | Only `slack` is supported |
-| `bot_token_env` | yes | Env var name for the bot token |
-| `app_token_env` | yes | Env var name for the Socket Mode app token |
+| `env.bot_token` | yes | Env var name for the bot token |
+| `env.app_token` | yes | Env var name for the Socket Mode app token |
+| `settings.include_archived_channels` | no | Include archived channels in the cached channel list |
+| `settings.inject_channels_into_prompt` | no | Inject the cached channel list into the system prompt |
+| `settings.inject_users_into_prompt` | no | Inject the Slack user list into the system prompt |
+| `settings.expand_mentions` | no | Expand Slack mentions and channel references into readable text in inbound messages |
 
 Tokens are resolved from the process environment after `runtime.env_file` is loaded.
 
@@ -237,7 +278,7 @@ roles:
   team:
     agents: [operator, researcher]
   guest:
-    agents: [operator]
+    agents: []
 ```
 
 Roles define which agents a user may message.
@@ -250,78 +291,13 @@ Roles define which agents a user may message.
 
 `operator user add` warns when you create a non-admin user with a role name that is not defined in config.
 
-## `memory`
+## Memory And State
 
-```yaml
-memory:
-  embed_model: "openai/text-embedding-3-small"
-  embed_dimensions: 1536
-  max_memories: 10000
-  inject_top_k: 5
-  inject_min_relevance: 0.1
-  candidate_ttl_days: 14
-  harvester:
-    enabled: true
-    schedule: "*/30 * * * *"
-    models:
-      - "openai/gpt-4.1-mini"
-  cleaner:
-    enabled: true
-    schedule: "0 3 * * *"
-    models:
-      - "openai/gpt-4.1-mini"
-```
+Current Operator has no top-level `memory:` or `state:` config sections.
 
-| Field | Default | Notes |
-| --- | --- | --- |
-| `embed_model` | `""` | Required when memory is active |
-| `embed_dimensions` | `1536` | Must match the embedding model output width |
-| `max_memories` | `10000` | Per-scope cap. Saves past this cap are skipped |
-| `inject_top_k` | `5` | Max recalled memories after filtering |
-| `inject_min_relevance` | `0.1` | Minimum cosine similarity for recall |
-| `candidate_ttl_days` | `14` | TTL for candidate memories |
-| `harvester` | disabled | Extracts memories from conversations |
-| `cleaner` | disabled | Deduplicates and tidies stored memories |
+- Memory files live under `~/.operator/memory/` and `~/.operator/agents/<agent>/memory/`.
+- The search index lives at `~/.operator/db/memory_index.db`.
+- Optional semantic search is configured with `defaults.embeddings`.
+- Agent state is stored as JSON files under `~/.operator/agents/<agent>/state/`.
 
-<Warning>
-  Memory is only active when `memory.harvester.enabled` or `memory.cleaner.enabled` is `true`. That same switch controls:
-
-  - automatic memory recall in chat and jobs
-  - pinned-memory injection
-  - runtime memory tools like `save_memory` and `search_memories`
-
-  The `operator memories` CLI still works because it reads the SQLite store directly.
-</Warning>
-
-### `harvester` and `cleaner`
-
-When either worker is enabled:
-
-- `embed_model` becomes required
-- `schedule` must be a valid cron expression
-- `models` must contain at least one valid LiteLLM model string
-
-`models` is a fallback chain, just like `defaults.models`. If the first model errors or is rate-limited, the next one is tried. A singular `model:` key is also accepted and normalized into a one-element list.
-
-The harvester reviews recent conversations and extracts reusable facts. The cleaner works scope-by-scope and can merge, split, or delete memories, but it may not delete pinned memories.
-
-## Environment Variables Operator Sets
-
-These variables are provided automatically in runtime contexts:
-
-| Variable | Where | Meaning |
-| --- | --- | --- |
-| `OPERATOR_HOME` | shell commands, skill commands, job hooks | Absolute path to the Operator home directory |
-| `JOB_NAME` | job hooks | Current job name |
-| `OPERATOR_AGENT` | job hooks | Agent executing the job |
-| `OPERATOR_DB` | job hooks | Absolute path to the SQLite database |
-
-Use `$OPERATOR_HOME` instead of `~/.operator` in scripts and skills.
-
-## Related Docs
-
-- [Quickstart](/quickstart)
-- [Agents](/concepts/agents)
-- [Models & Thinking](/concepts/models)
-- [Memory](/concepts/memory)
-- [Slack](/transports/slack)
+See [Memory](/concepts/memory) and [Tools](/concepts/tools) for the runtime behavior of rules, notes, and state files.

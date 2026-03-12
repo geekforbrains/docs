@@ -7,29 +7,29 @@ description: "Local AI agents for Slack, jobs, tools, and team workflows"
 
 # Agents have joined the chat.
 
-Operator is a local runtime for autonomous agents that live in Slack, use tools, remember context, and run scheduled jobs. The current transport is Slack. Agents, jobs, and skills are plain markdown files under `~/.operator/`.
+Operator is a local runtime for autonomous agents that live in Slack, use tools, remember context, and run scheduled jobs. Slack is the only transport today. Agents, jobs, skills, and memory stay as plain files under `~/.operator/`.
 
 ## Scan First
 
 - Slack-native today: DMs and `@mentions` in invited channels.
-- Local-first: state lives in `~/.operator/`, with SQLite in `~/.operator/state/operator.db`.
-- File-driven: agents use `AGENT.md`, jobs use `JOB.md`, skills use `SKILL.md`.
+- Local-first: state lives in `~/.operator/`, with SQLite in `~/.operator/db/operator.db`.
+- File-driven: agents use `AGENT.md`, jobs use `JOB.md`, skills use `SKILL.md`, and memory uses markdown under `rules/` and `notes/`.
 - Team-aware: every inbound transport message is authenticated against users and roles.
 - Model-agnostic: model names use LiteLLM format like `anthropic/claude-sonnet-4-6`.
-- Transport/runtime tools are real: shell, files, web, messaging, jobs, skills, memory, KV, and sub-agents.
+- Tooling is real: shell, files, web, messaging, jobs, skills, memory, state, and sub-agents.
 
 <CardGroup cols={2}>
   <Card title="Quickstart" icon="rocket" href="/quickstart">
-    Install Operator, run `operator setup`, and send your first Slack message.
+    Install Operator, run `operator init`, and send your first Slack message.
   </Card>
   <Card title="Configuration" icon="gear" href="/configuration">
-    Runtime, models, transports, permissions, memory, and roles.
+    Runtime, models, Slack transport, permissions, embeddings, and roles.
   </Card>
   <Card title="Agents" icon="robot" href="/concepts/agents">
-    Prompt files, workspaces, sandboxing, prompt assembly, and delegation.
+    Prompt files, workspaces, prompt assembly, permissions, and delegation.
   </Card>
   <Card title="Jobs" icon="clock" href="/concepts/jobs">
-    Cron jobs, hooks, transport behavior, inheritance, and counters.
+    Cron jobs, hooks, UTC scheduling, transport behavior, and counters.
   </Card>
   <Card title="Tools" icon="wrench" href="/concepts/tools">
     Built-in tools, transport tools, and the behavior that matters in practice.
@@ -43,9 +43,10 @@ Operator is a local runtime for autonomous agents that live in Slack, use tools,
 
 - **Agents as teammates.** Each agent has its own prompt, workspace, model settings, permissions, and optional Slack transport.
 - **Sub-agent delegation.** Agents can call `spawn_agent(...)` to break work into focused sub-tasks, including cross-agent delegation.
-- **Jobs.** Scheduled markdown-defined jobs run every minute against cron schedules in your configured timezone.
+- **Jobs.** Scheduled markdown-defined jobs run every minute against UTC cron schedules.
 - **Users and roles.** Unknown users are rejected. Allowed agents are the union of the user's assigned roles. `admin` is built in.
-- **Optional long-term memory.** When memory services are enabled, Operator injects pinned and semantically relevant memories into live requests.
+- **File-backed memory.** Rules are always injected, notes are searched on demand, and expired entries move to `trash/`.
+- **Per-agent state.** Agents can keep operational state in JSON files under `agents/<name>/state/`.
 - **Fallback chains and simple reasoning levels.** Configure `models:` as a failover list and `thinking:` as `off|low|medium|high`.
 
 ## File Layout
@@ -58,31 +59,52 @@ Operator is a local runtime for autonomous agents that live in Slack, use tools,
 ├── shared/                    # Shared files for all agents
 ├── logs/
 │   └── operator.log
-├── state/
-│   └── operator.db            # SQLite state
+├── db/
+│   ├── operator.db            # SQLite runtime state
+│   └── memory_index.db        # FTS5 / optional vector memory index
 ├── agents/
 │   └── <agent>/
 │       ├── AGENT.md
-│       └── workspace/
+│       ├── workspace/
+│       │   ├── inbox/
+│       │   ├── work/
+│       │   ├── artifacts/
+│       │   ├── tmp/
+│       │   └── shared -> ~/.operator/shared/
+│       ├── memory/
+│       │   ├── rules/
+│       │   ├── notes/
+│       │   └── trash/
+│       └── state/
 ├── jobs/
 │   └── <job>/
 │       ├── JOB.md
 │       └── scripts/
-└── skills/
-    └── <skill>/
-        ├── SKILL.md
-        ├── scripts/
-        ├── references/
-        └── assets/
+├── skills/
+│   └── <skill>/
+│       ├── SKILL.md
+│       ├── scripts/
+│       ├── references/
+│       └── assets/
+└── memory/
+    ├── global/
+    │   ├── rules/
+    │   ├── notes/
+    │   └── trash/
+    └── users/
+        └── <user>/
+            ├── rules/
+            ├── notes/
+            └── trash/
 ```
 
 ## How A Request Flows
 
 1. A Slack DM, Slack `@mention`, or scheduled job starts a run.
-2. Operator loads config, resolves the agent, and assembles the system prompt from `SYSTEM.md`, `AGENT.md`, skills, and agent metadata.
-3. It renders creation-time stamps onto `user` messages in the configured timezone, for example `[Monday, 2026-03-09T09:22:40-07:00]`, and injects any conversation context it needs for the run.
+2. Operator loads config, resolves the agent, and assembles the system prompt from `SYSTEM.md`, `AGENT.md`, skills, peer agents, transport context, and rule memory.
+3. It renders creation timestamps onto live `user` messages using the authenticated user's timezone when available, otherwise UTC.
 4. The agent runs a model/tool loop until it returns a final answer or hits `max_iterations`.
-5. Messages, job state, KV data, and memory state are stored in SQLite.
+5. Conversations, identities, and job state are stored in SQLite. File-backed memory and agent state remain on disk.
 
 ## Recommended Reading Order
 

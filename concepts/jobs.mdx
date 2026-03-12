@@ -7,7 +7,7 @@ Jobs are stored in `~/.operator/jobs/<name>/JOB.md`.
 
 ## Scan First
 
-- Cron schedules are evaluated in `runtime.timezone`.
+- Cron schedules are evaluated against the current UTC minute.
 - Job prompts are markdown bodies under YAML frontmatter.
 - The job body becomes a stamped `user` message when the run starts.
 - `prerun` can gate a job by returning non-zero.
@@ -35,7 +35,7 @@ Summarize the key events from the last 24 hours.
 Post a short teaser to #general, then reply in a thread with the full summary.
 ```
 
-The body is the user prompt for the job run, timestamp-rendered at execution time in `runtime.timezone`.
+The body is the `user` prompt for the job run. Because jobs do not run as an authenticated user, the rendered timestamp on that message uses UTC.
 
 ## Scheduler Behavior
 
@@ -45,8 +45,7 @@ The background runtime:
 - checks cron matches once per minute
 - skips disabled jobs
 - increments `skip_count` when a previous run of the same job is still active
-
-The cron match uses `runtime.timezone`.
+- serializes jobs per agent, queueing multiple due jobs that target the same agent
 
 ## Agent Selection
 
@@ -59,7 +58,8 @@ That chosen agent supplies:
 
 - the prompt body from `AGENT.md`
 - permissions
-- sandbox setting
+- available skills
+- workspace
 - `thinking`
 - `context_ratio`
 - `max_output_tokens`
@@ -82,8 +82,8 @@ Scheduled jobs use the selected agent's configured transport when one exists.
 
 That means:
 
-- jobs targeting a Slack-connected agent can call `send_message`
-- jobs targeting a headless agent still run, but transport tools like `send_message` and `send_file` will error during scheduled execution
+- jobs targeting a Slack-connected agent can call `send_message` or `send_file`
+- jobs targeting a headless agent still run, but transport tools will error during scheduled execution
 
 `operator job run <name>` is different:
 
@@ -115,32 +115,23 @@ Job hooks receive:
 | Variable | Value |
 | --- | --- |
 | `JOB_NAME` | current job name |
+| `JOB_DIR` | absolute path to the job directory |
 | `OPERATOR_AGENT` | agent running the job |
 | `OPERATOR_HOME` | Operator base directory |
 | `OPERATOR_DB` | path to `operator.db` |
 
-The hook working directory is the job directory.
+The hook working directory is the job directory. Hook timeout comes from `defaults.hook_timeout` and defaults to `30` seconds.
 
 ## Memory In Jobs
 
 Jobs do not use user-scoped memory.
 
-Job recall and pinned-memory injection only use:
+Job recall and rule injection only use:
 
 - `agent/<agent-name>`
-- `global/global`
+- `global`
 
 This keeps scheduled work from depending on a specific human user's private context.
-
-## Output Rules
-
-The job system prompt explicitly tells the model:
-
-- its plain text responses are internal
-- if it wants to publish something, it must call `send_message`
-- if nothing should be published, it should not call `send_message`
-
-That is why posting instructions belong in the job body, not in memory or KV.
 
 ## Runtime State
 
@@ -159,6 +150,6 @@ Each job has persisted runtime counters:
 
 ## Managing Jobs
 
-- Create or edit files manually in `~/.operator/jobs/`
-- Use the built-in `manage_job` tool for runtime creation/update/delete
-- Use the [Jobs CLI](/cli/jobs) to inspect, enable, disable, and manually run jobs
+- create or edit files manually in `~/.operator/jobs/`
+- use the deterministic runtime tools `create_job`, `update_job`, `delete_job`, `enable_job`, `disable_job`, and `list_jobs`
+- use the [Jobs CLI](/cli/jobs) to inspect, enable, disable, and manually run jobs

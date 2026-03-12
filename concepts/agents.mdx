@@ -1,6 +1,6 @@
 ---
 title: "Agents"
-description: "Prompt files, workspaces, sandboxing, delegation, and prompt assembly"
+description: "Prompt files, workspaces, permissions, delegation, and prompt assembly"
 ---
 
 Each agent lives at `~/.operator/agents/<name>/AGENT.md` and gets its own workspace at `~/.operator/agents/<name>/workspace/`.
@@ -8,9 +8,9 @@ Each agent lives at `~/.operator/agents/<name>/AGENT.md` and gets its own worksp
 ## Scan First
 
 - `AGENT.md` may include optional YAML frontmatter.
-- The markdown body becomes the agent prompt.
+- The markdown body becomes the stable agent prompt.
 - Agents inherit models and execution settings from `defaults` unless overridden.
-- `sandbox: true` only affects file tools, not `run_shell`.
+- Permissions are closed by default. No `permissions` block means no tools and no skills.
 - Agents without a transport are headless: usable for jobs and `spawn_agent(...)`, not direct chat.
 
 ## Minimal Agent
@@ -33,6 +33,9 @@ agents:
     models:
       - "openai/o3"
     thinking: high
+    permissions:
+      tools: [web_fetch, read_skill, run_skill]
+      skills: [pr-reviewer]
 ```
 
 Add a `transport:` block if you want the agent reachable in Slack.
@@ -46,6 +49,8 @@ Add a `transport:` block if you want the agent reachable in Slack.
 
 If an agent has a `description`, other agents can see it in their injected "Available Agents" list and may choose it when calling `spawn_agent(agent="...")`.
 
+Agents the current user cannot access still appear in that list, but they are marked inaccessible so the model can explain the restriction instead of pretending the agent does not exist.
+
 The frontmatter is stripped before prompt injection. The LLM sees only the markdown body.
 
 ## Workspace
@@ -55,6 +60,14 @@ Each agent runs with:
 - working directory: `~/.operator/agents/<name>/workspace/`
 - prompt file: `~/.operator/agents/<name>/AGENT.md`
 - shared directory symlink: `workspace/shared -> ~/.operator/shared/`
+
+The default workspace layout includes:
+
+- `inbox/` for inbound files and imported source material
+- `work/` for active files and intermediate outputs
+- `artifacts/` for final deliverables
+- `tmp/` for disposable scratch files
+- `shared/` for cross-agent file sharing
 
 This workspace is used by:
 
@@ -66,6 +79,8 @@ This workspace is used by:
 - `run_skill` subprocesses
 
 Files persist across chat turns and job runs.
+
+File tools default to the workspace for relative paths, but they are not sandboxed. Absolute paths still work unless you remove the relevant file tools via permissions.
 
 ## Prompt Assembly
 
@@ -80,9 +95,11 @@ Operator assembles the system prompt in a fixed order.
 
 ### Dynamic suffix
 
-1. transport/job context
-2. pinned memories
-3. transport-specific help, such as Slack messaging guidance and channel lists
+1. transport or job context
+2. authenticated user context
+3. global, agent, and user rule memory
+
+Per-turn context blocks such as Slack thread snapshots, system events, and message metadata are prepended to the current `user` message instead of being baked into the stable system prompt.
 
 Stable and dynamic sections are separated by an internal cache boundary. On Anthropic models, Operator uses that split to apply prompt caching safely.
 
@@ -96,7 +113,7 @@ That means:
 - scheduled jobs get their run-start time rendered onto the job body
 - `spawn_agent(...)` gets the child task time rendered onto the sub-agent's initial `user` message
 
-The rendered format is local to `runtime.timezone`, for example:
+The rendered format uses the authenticated user's timezone when available, otherwise UTC, for example:
 
 ```text
 [Monday, 2026-03-09T09:22:40-07:00]
@@ -104,44 +121,26 @@ The rendered format is local to `runtime.timezone`, for example:
 
 Assistant, tool, and system messages are not stamped. Older stored messages with `null` `created_at` remain unchanged.
 
-## Sandbox
-
-```yaml
-agents:
-  operator:
-    sandbox: true
-```
-
-| Setting | Behavior |
-| --- | --- |
-| `sandbox: true` | File tools cannot escape the workspace |
-| `sandbox: false` | File tools may read/write outside the workspace |
-
-Important caveats:
-
-- `run_shell` is unaffected by sandboxing
-- `shared/` is a symlink that resolves outside the workspace, so sandboxed file tools cannot follow it
-- shell commands can still access `shared/` because the shell runs from the workspace and follows the symlink normally
-
-Use sandboxing and permissions together for public-facing agents.
-
 ## Permissions
 
 ```yaml
 agents:
   researcher:
     permissions:
-      tools: [web_fetch, read_skill, run_skill, spawn_agent]
-      skills: [job-creator]
+      tools: [@files, web_fetch, read_skill, run_skill, spawn_agent]
+      skills: [pr-reviewer]
 ```
 
 Permissions are flat allow-lists.
 
 | Config | Result |
 | --- | --- |
-| omitted | unrestricted |
-| `"*"` | unrestricted |
+| omitted | deny all |
+| `null` | deny all |
+| `"*"` | allow everything |
 | list | only listed names are visible |
+
+`@group` entries expand through `permission_groups` in `operator.yaml`.
 
 Tool permissions and skill permissions are independent.
 
@@ -151,10 +150,15 @@ Tool permissions and skill permissions are independent.
 
 Behavior depends on whether `agent=` is provided:
 
-- no `agent`: inherit the current agent prompt, models, workspace, thinking level, sandbox setting, permissions, and shared dir
-- `agent="other"`: switch to the target agent's resolved config
+- no `agent`: start a fresh run of the current agent
+- `agent="other"`: switch to the target agent's prompt, memory, skills, workspace, and permissions
 
-Sub-agents are limited to depth `3`.
+Cross-agent spawns still check the current user's role-based access before running.
+
+Operational limits:
+
+- max depth is `3`
+- sub-agent runs cap `max_iterations` at `10` even if the parent or target agent allows more
 
 The child run's initial `user` message is timestamp-rendered the same way as chat and job requests.
 
@@ -164,7 +168,7 @@ Agents without a `transport` block are still useful for:
 
 - scheduled jobs
 - `spawn_agent(agent="...")`
-- shared model/prompt presets
+- shared model and prompt presets
 
 <Warning>
   The long-running `operator` service still requires at least one transported agent somewhere in config. Headless-only configs cannot start the runtime.

@@ -12,6 +12,7 @@ Every inbound transport message is authenticated. There is no “disable auth”
 - Custom roles map to explicit agent lists.
 - Allowed agents are the union of the user's roles.
 - `runtime.reject_response` decides whether rejections are silent or announced.
+- User timezone is stored on the user record, not in `operator.yaml`.
 
 ## Identity Model
 
@@ -71,7 +72,25 @@ runtime:
 | `ignore` | silently drop the message |
 | `announce` | reply with `You don't have access to this agent.` |
 
-If there are no users in the database at all, the runtime still rejects inbound messages. `operator setup` is the easiest way to create the first admin.
+If there are no users in the database at all, the runtime still rejects inbound messages. `operator init` does not create users for you. Bootstrap the first admin explicitly:
+
+```sh
+operator user add gavin --role admin slack U04ABC123
+```
+
+## Timezone
+
+User timezone is part of the stored user profile.
+
+- it appears in the runtime prompt context
+- live `user` message timestamps render in that timezone when present
+- jobs do not use it because they run without a user context
+
+Users can store their own timezone in chat with:
+
+```text
+set_timezone("America/Vancouver")
+```
 
 ## CLI Management
 

@@ -9,8 +9,8 @@ Operator uses Slack Socket Mode. You do not need a public webhook URL.
 
 - Supported inbound patterns: DMs and `@mentions` in invited channels
 - Supported files: inline images up to 5 MB, all other files saved locally up to 50 MB
-- The runtime uses your configured timezone when formatting Slack timestamps
-- Slack adds transport tools like `list_channels`, `read_channel`, and `read_thread`
+- The runtime uses the authenticated user's stored timezone when rendering live prompt timestamps
+- Slack adds transport tools like `slack_find_users`, `slack_list_channels`, and `slack_read_thread`
 - In-chat commands start with `!` and bypass the LLM
 
 ## Slack App Setup
@@ -40,6 +40,7 @@ Under **OAuth & Permissions**, add:
 - `im:history`
 - `im:read`
 - `im:write`
+- `reactions:write`
 - `users:read`
 
 ### 3. Subscribe to events
@@ -48,11 +49,14 @@ Subscribe to:
 
 - `app_mention`
 - `message.im`
+- `reaction_added`
+- `reaction_removed`
 
 That covers:
 
 - DMs
 - channel mentions
+- reaction system events
 
 ### 4. Install the app
 
@@ -76,13 +80,19 @@ agents:
   operator:
     transport:
       type: slack
-      bot_token_env: SLACK_BOT_TOKEN
-      app_token_env: SLACK_APP_TOKEN
+      env:
+        bot_token: SLACK_BOT_TOKEN
+        app_token: SLACK_APP_TOKEN
+      settings:
+        include_archived_channels: false
+        inject_channels_into_prompt: true
+        inject_users_into_prompt: true
+        expand_mentions: true
 ```
 
 ## What The Runtime Handles
 
-SlackTransport accepts:
+Slack transport accepts:
 
 - DMs from human users
 - `@mentions` in channels where the bot is invited
@@ -90,18 +100,20 @@ SlackTransport accepts:
 It ignores:
 
 - bot-authored messages
-- most Slack system/edit subtypes
+- most Slack system and edit subtypes
 
-## Channel and Thread Context
+## Channel, User, and Thread Context
 
 Slack runtime behavior includes:
 
 - resolving user IDs to human names
 - resolving channel IDs to `#channel-name`
-- formatting Slack timestamps in your configured timezone
-- exposing channel-reading tools to the agent
+- injecting cached user and channel lists into the system prompt when enabled
+- exposing message metadata (`message_id`, `channel_id`, and `thread_id`) as a request-only context block
 
 When the agent is first mentioned inside an existing thread, Operator may inject a one-time snapshot of earlier replies in that thread so the model has context it missed before being added.
+
+Reaction events are buffered as lightweight system events and injected into the next request in the same conversation.
 
 ## In-Chat Commands
 
@@ -116,7 +128,7 @@ Commands bypass the LLM and are handled directly by the runtime.
 | `!jobs` | list jobs |
 | `!jobs <name>` | show one job's details |
 | `!skills` | list discovered skills |
-| `!memories` | list pinned agent/global memories |
+| `!memories` | list active rules from agent and global memory |
 
 There is currently **no** `!config` command.
 
@@ -140,9 +152,12 @@ These tools exist only during live Slack-backed runs:
 
 | Tool | Use it for |
 | --- | --- |
-| `list_channels()` | list postable channels, IDs, and cached topic/purpose snippets |
-| `read_channel(channel, count=20)` | fetch recent channel messages |
-| `read_thread(channel, thread_id, count=50)` | fetch thread replies |
+| `slack_find_users(query="", limit=20, linked_only=false)` | find Slack users by display name, handle, Slack ID, email, or linked Operator username |
+| `slack_list_channels(query="")` | list postable channels, IDs, and cached topic or purpose snippets |
+| `slack_read_channel(channel, count=20)` | fetch recent channel messages |
+| `slack_read_thread(channel, thread_id, count=50)` | fetch thread replies |
+| `slack_add_reaction(channel, message_id, emoji)` | add an emoji reaction |
+| `slack_remove_reaction(channel, message_id, emoji)` | remove an emoji reaction |
 
 `send_message` also accepts Slack channel names like `#general` or raw channel IDs.
 
@@ -152,8 +167,8 @@ Inbound Slack files behave like this:
 
 | File type | Runtime behavior |
 | --- | --- |
-| image/png, image/jpeg, image/gif, image/webp up to 5 MB | inlined into the model request as an image block |
-| other file types up to 50 MB | saved under `workspace/uploads/` and described in text |
+| image/png, image/jpeg, image/gif, image/webp up to 5 MB | inlined into the model request as an image block and saved under `workspace/inbox/` |
+| other file types up to 50 MB | saved under `workspace/inbox/` and described in text |
 | larger than 50 MB | skipped |
 
 Additional details:

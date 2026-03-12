@@ -13,7 +13,7 @@ operator job enable <job-name>
 operator job disable <job-name>
 ```
 
-The CLI is for inspection and control. Creating, updating, and deleting jobs is done by editing `JOB.md` files directly or via the runtime `manage_job` tool.
+The CLI is for inspection and control. Creating, updating, and deleting jobs is done by editing `JOB.md` files directly or via the runtime tools `create_job`, `update_job`, and `delete_job`.
 
 ## `list`
 
@@ -23,11 +23,11 @@ operator job list
 
 Shows one row per job with:
 
-- enabled/disabled state
+- enabled or disabled state
 - schedule
 - last run
 - last result
-- run/error/gate/skip counters
+- run, error, gate, and skip counters
 
 ## `info`
 
