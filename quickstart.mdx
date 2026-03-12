@@ -148,6 +148,8 @@ Once the runtime is running:
 
 If your Slack user is not registered, Operator rejects the message according to `runtime.reject_response`.
 
+Slack sessions are thread-scoped on purpose. A top-level DM or top-level channel `@mention` starts a fresh session thread. In channels, mention the agent again in later thread replies if you want those replies treated as new input.
+
 ## Sanity Checks
 
 ```sh

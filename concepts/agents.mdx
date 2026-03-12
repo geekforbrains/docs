@@ -186,6 +186,8 @@ Agents without a `transport` block are still useful for:
 
 When an agent is first mentioned inside an existing Slack thread, Operator may inject a one-time snapshot of earlier thread replies so the model can see what happened before it joined. That snapshot is request-only and not treated as direct user input.
 
+Slack sessions remain thread-scoped and mention-gated in channels. The thread root is the conversation boundary, but unmentioned human replies inside that thread are ambient conversation, not new agent input. If the agent needs that extra thread context, it should read it deliberately with Slack tools.
+
 ## Related Docs
 
 - [Configuration](/configuration)

@@ -54,6 +54,8 @@ Defaults:
 
 `send_file` rejects files over 50 MB.
 
+For Slack-backed runs, that default thread is the current Slack session thread. If the agent needs context from outside the addressed messages in that session, it should use Slack read tools explicitly.
+
 ## Sub-Agents
 
 | Tool | Notes |
@@ -144,8 +146,8 @@ Slack currently adds:
 
 | Tool | Notes |
 | --- | --- |
-| `slack_find_users(query="", limit=20, linked_only=false)` | find Slack users by display name, handle, Slack ID, email, or linked Operator username |
-| `slack_list_channels(query="")` | show cached postable channels |
+| `slack_find_users(query="", limit=20, linked_only=false)` | find Slack users by display name, handle, Slack ID, email, or linked Operator username; use the returned `<@UID>` mention when names are ambiguous |
+| `slack_list_channels(query="")` | show current postable channels from Slack's refreshed snapshot |
 | `slack_read_channel(channel, count=20)` | fetch recent channel messages |
 | `slack_read_thread(channel, thread_id, count=50)` | fetch thread replies |
 | `slack_add_reaction(channel, message_id, emoji)` | add an emoji reaction |

@@ -11,7 +11,7 @@ Operator is a local runtime for autonomous agents that live in Slack, use tools,
 
 ## Scan First
 
-- Slack-native today: DMs and `@mentions` in invited channels.
+- Slack-native today: DMs and `@mentions` in invited channels, with thread-scoped sessions.
 - Local-first: state lives under the active Operator home, usually `~/.operator/`, with SQLite in `db/operator.db`.
 - File-driven: agents use `AGENT.md`, jobs use `JOB.md`, skills use `SKILL.md`, and memory uses markdown under `rules/` and `notes/`.
 - Team-aware: every inbound transport message is authenticated against users and roles.
@@ -105,6 +105,8 @@ Operator is a local runtime for autonomous agents that live in Slack, use tools,
 3. It renders creation timestamps onto live `user` messages using the authenticated user's timezone when available, otherwise UTC.
 4. The agent runs a model/tool loop until it returns a final answer or hits `max_iterations`.
 5. Conversations, identities, and job state are stored in SQLite. File-backed memory and agent state remain on disk.
+
+Slack chat runs are intentionally thread-scoped: a top-level DM or top-level channel mention starts a fresh session thread, and later channel replies only count as new input when they mention the agent again.
 
 ## Recommended Reading Order
 

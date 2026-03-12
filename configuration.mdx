@@ -266,12 +266,14 @@ transport:
 | `type` | yes | Only `slack` is supported |
 | `env.bot_token` | yes | Env var name for the bot token |
 | `env.app_token` | yes | Env var name for the Socket Mode app token |
-| `settings.include_archived_channels` | no | Include archived channels in the cached channel list |
-| `settings.inject_channels_into_prompt` | no | Inject the cached channel list into the system prompt |
+| `settings.include_archived_channels` | no | Include archived channels in the refreshed channel snapshot |
+| `settings.inject_channels_into_prompt` | no | Inject the refreshed current channel snapshot into the system prompt |
 | `settings.inject_users_into_prompt` | no | Inject the Slack user list into the system prompt |
-| `settings.expand_mentions` | no | Expand Slack mentions and channel references into readable text in inbound messages |
+| `settings.expand_mentions` | no | Expand outbound Slack unique `@Name` and `#channel` references into Slack link syntax outside code blocks |
 
 Tokens are resolved from the process environment after `runtime.env_file` is loaded.
+
+When channel injection is enabled, Slack rebuilds that prompt-facing channel snapshot on startup and on channel create, rename, archive, and unarchive events. The goal is to reflect current Slack truth, not keep stale aliases around after renames.
 
 ## `roles`
 

@@ -106,10 +106,20 @@ It ignores:
 
 Slack runtime behavior includes:
 
+- treating Slack conversations as thread-scoped sessions
 - resolving user IDs to human names
 - resolving channel IDs to `#channel-name`
-- injecting cached user and channel lists into the system prompt when enabled
+- injecting the current user list and current channel snapshot into the system prompt when enabled
 - exposing message metadata (`message_id`, `channel_id`, and `thread_id`) as a request-only context block
+
+Slack session rules are intentional:
+
+- a top-level DM starts a fresh private session thread
+- a top-level channel `@mention` starts a fresh channel session thread
+- in channels, later replies continue that session only when they mention the agent again
+- unmentioned human replies in the thread are ambient chatter and are ignored unless the agent inspects them with `slack_read_thread(...)`
+
+The injected channel list is refreshed on startup and on Slack channel lifecycle events such as create, rename, archive, and unarchive. Old channel names do not remain as prompt-visible aliases after a refresh.
 
 When the agent is first mentioned inside an existing thread, Operator may inject a one-time snapshot of earlier replies in that thread so the model has context it missed before being added.
 
@@ -139,6 +149,8 @@ Slack conversation IDs are built from:
 slack:<agent-name>:<channel-id>:<root-thread-ts>
 ```
 
+That means the Slack thread root is the conversation boundary. New top-level DMs and new top-level channel mentions start fresh sessions. Replies stay attached to that root thread, but channel replies still need to mention the agent to count as new input.
+
 If a second message arrives while the same conversation is still busy, Operator replies:
 
 ```text
@@ -151,14 +163,15 @@ These tools exist only during live Slack-backed runs:
 
 | Tool | Use it for |
 | --- | --- |
-| `slack_find_users(query="", limit=20, linked_only=false)` | find Slack users by display name, handle, Slack ID, email, or linked Operator username |
-| `slack_list_channels(query="")` | list postable channels, IDs, and cached topic or purpose snippets |
+| `slack_find_users(query="", limit=20, linked_only=false)` | find Slack users by display name, handle, Slack ID, email, or linked Operator username; use the returned `<@UID>` mention when names are ambiguous |
+| `slack_list_channels(query="")` | list postable channels, IDs, and current topic or purpose snippets from the refreshed snapshot |
 | `slack_read_channel(channel, count=20)` | fetch recent channel messages |
 | `slack_read_thread(channel, thread_id, count=50)` | fetch thread replies |
 | `slack_add_reaction(channel, message_id, emoji)` | add an emoji reaction |
 | `slack_remove_reaction(channel, message_id, emoji)` | remove an emoji reaction |
 
 `send_message` also accepts Slack channel names like `#general` or raw channel IDs.
+Raw `@Name` only auto-expands when the display name is unique. When multiple Slack users share a display name, use the explicit `<@UID>` mention returned by `slack_find_users(...)`.
 
 ## File Handling
 
