@@ -5,9 +5,12 @@ description: "Prompt files, workspaces, permissions, delegation, and prompt asse
 
 Each agent lives at `~/.operator/agents/<name>/AGENT.md` and gets its own workspace at `~/.operator/agents/<name>/workspace/`.
 
+The configured key under `agents:` in `operator.yaml` is the agent's runtime identity and source of truth.
+
 ## Scan First
 
 - `AGENT.md` may include optional YAML frontmatter.
+- The configured `agents:` key is the runnable agent name; frontmatter only adds human-facing metadata.
 - The markdown body becomes the stable agent prompt.
 - Agents inherit models and execution settings from `defaults` unless overridden.
 - Permissions are closed by default. No `permissions` block means no tools and no skills.
@@ -17,7 +20,6 @@ Each agent lives at `~/.operator/agents/<name>/AGENT.md` and gets its own worksp
 
 ```markdown
 ---
-name: researcher
 description: Investigates technical questions and summarizes findings.
 ---
 
@@ -38,16 +40,20 @@ agents:
       skills: [pr-reviewer]
 ```
 
+The configured key `researcher` is the name used by `spawn_agent(agent="researcher")` and by the injected peer-agent list.
+
 Add a `transport:` block if you want the agent reachable in Slack.
 
 ## Frontmatter
 
 | Field | Required | What it does |
 | --- | --- | --- |
-| `name` | no | Defaults to the directory name |
-| `description` | no | Used for agent discovery in other agents' prompts |
+| `description` | no | Human-facing text shown in `operator agents` and in the injected "Available Agents" list |
+| `name` | no | Optional self-label only; if present it should match the configured agent key, but Operator does not use it as runtime identity |
 
-If an agent has a `description`, other agents can see it in their injected "Available Agents" list and may choose it when calling `spawn_agent(agent="...")`.
+Operator injects all configured peer agents into the "Available Agents" list. `description` is the human-facing text for that list and for `operator agents`.
+
+If `description` is missing, Operator still keeps the agent visible so the prompt surface stays aligned with `config.agents`.
 
 Agents the current user cannot access still appear in that list, but they are marked inaccessible so the model can explain the restriction instead of pretending the agent does not exist.
 
@@ -91,7 +97,7 @@ Operator assembles the system prompt in a fixed order.
 1. `~/.operator/SYSTEM.md`
 2. the agent prompt body from `AGENT.md`
 3. discovered skills (`name` and `description`)
-4. discovered peer agents (`name` and `description`)
+4. configured peer agents (configured name + `AGENT.md` description)
 
 ### Dynamic suffix
 
@@ -146,12 +152,14 @@ Tool permissions and skill permissions are independent.
 
 ## Sub-Agents
 
-`spawn_agent(task, context="", agent="")` creates a focused child run and returns its final response.
+`spawn_agent(task, context="", agent="")` creates a fresh isolated child run and returns its final response.
 
 Behavior depends on whether `agent=` is provided:
 
-- no `agent`: start a fresh run of the current agent
-- `agent="other"`: switch to the target agent's prompt, memory, skills, workspace, and permissions
+- no `agent`: start a fresh isolated run of the current agent
+- `agent="other"`: start a fresh isolated run of the target agent using that agent's own prompt, memory, state, skills, workspace, and permissions
+
+Only the delegated `task`, optional `context`, and current user scope are forwarded to the child. The parent conversation history is not inherited automatically.
 
 Cross-agent spawns still check the current user's role-based access before running.
 

@@ -58,13 +58,14 @@ Defaults:
 
 | Tool | Notes |
 | --- | --- |
-| `spawn_agent(task, context="", agent="")` | creates a focused child run and returns its final answer |
+| `spawn_agent(task, context="", agent="")` | creates a fresh isolated child run and returns its final answer |
 
 Rules:
 
 - max depth is `3`
-- without `agent=`, the child inherits the current run context
-- with `agent=`, the child switches to that agent's config
+- without `agent=`, the child starts a fresh isolated run of the current agent
+- with `agent=`, the child starts a fresh isolated run of that target agent with its own prompt, memory, state, skills, workspace, and permissions
+- only the delegated `task` and optional `context` are passed in; parent conversation history is not inherited automatically
 - child runs cap `max_iterations` at `10`
 
 ## Memory
@@ -97,7 +98,7 @@ Memory rules:
 | `list_state()` | list all state keys for the current agent |
 | `delete_state(key)` | delete a state key |
 
-State lives in JSON files under `~/.operator/agents/<agent>/state/`.
+State lives in JSON files under the active Operator home, usually `~/.operator/agents/<agent>/state/`.
 
 Use state for operational data like:
 

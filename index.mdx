@@ -42,7 +42,7 @@ Operator is a local runtime for autonomous agents that live in Slack, use tools,
 ## What You Get
 
 - **Agents as teammates.** Each agent has its own prompt, workspace, model settings, permissions, and optional Slack transport.
-- **Sub-agent delegation.** Agents can call `spawn_agent(...)` to break work into focused sub-tasks, including cross-agent delegation.
+- **Fresh isolated sub-agent delegation.** Agents can call `spawn_agent(...)` to break work into focused child runs, including cross-agent delegation.
 - **Jobs.** Scheduled markdown-defined jobs run every minute against UTC cron schedules.
 - **Users and roles.** Unknown users are rejected. Allowed agents are the union of the user's assigned roles. `admin` is built in.
 - **File-backed memory.** Rules are always injected, notes are searched on demand, and expired entries move to `trash/`.
@@ -101,7 +101,7 @@ Operator is a local runtime for autonomous agents that live in Slack, use tools,
 ## How A Request Flows
 
 1. A Slack DM, Slack `@mention`, or scheduled job starts a run.
-2. Operator loads config, resolves the agent, and assembles the system prompt from `SYSTEM.md`, `AGENT.md`, skills, peer agents, transport context, and rule memory.
+2. Operator loads config, resolves the agent, and assembles the system prompt from `SYSTEM.md`, the agent's `AGENT.md` body, discovered skills, configured peer agents, transport context, and rule memory.
 3. It renders creation timestamps onto live `user` messages using the authenticated user's timezone when available, otherwise UTC.
 4. The agent runs a model/tool loop until it returns a final answer or hits `max_iterations`.
 5. Conversations, identities, and job state are stored in SQLite. File-backed memory and agent state remain on disk.

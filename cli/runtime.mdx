@@ -70,13 +70,13 @@ operator agents
 
 Shows:
 
-- configured agent name
-- frontmatter description from `AGENT.md`, when present
+- configured agent name from `operator.yaml`
+- description from `AGENT.md` when present, otherwise a fallback placeholder
 - transport type
 - resolved models
 - whether `AGENT.md` and `workspace/` exist
 
-This is the quickest way to confirm that an agent is both configured and scaffolded on disk.
+This command lists configured agents, not arbitrary folders on disk, so it is the quickest way to confirm that runtime config and on-disk scaffold agree.
 
 ## `operator tools`
 

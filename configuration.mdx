@@ -119,7 +119,7 @@ defaults:
 | `models` | required | Fallback chain of LiteLLM model IDs |
 | `thinking` | `off` | Reasoning level: `off`, `low`, `medium`, `high` |
 | `max_iterations` | `25` | Max model/tool loop iterations |
-| `context_ratio` | `0.5` | Fraction of the model input window Operator is willing to spend on message history. Must be greater than `0` and at most `1`. |
+| `context_ratio` | `0.5` | Fraction of the model input window Operator is willing to spend on live request context before each call. Must be greater than `0` and at most `1`. |
 | `max_output_tokens` | `null` | Per-call output cap. `null` means “use the model max when LiteLLM can resolve it” |
 | `hook_timeout` | `30` | Timeout in seconds for job prerun/postrun hooks |
 | `embeddings` | `null` | Optional embedding model config for semantic note search via `sqlite-vec` |
@@ -134,12 +134,12 @@ Operator also accepts a singular `model:` key in `defaults` or per-agent config 
 
 ### `context_ratio`
 
-When history exceeds the model budget, Operator:
+When a live request exceeds the model budget, Operator:
 
-1. keeps the system prompt
-2. keeps the latest user exchange
-3. drops older exchanges first
-4. shortens older non-user content if needed
+1. measures the full outbound payload, including messages and tool schemas
+2. keeps the system prompt
+3. keeps the latest user exchange
+4. drops older exchange groups first
 
 There is no special `0` value. `context_ratio` must be greater than `0`.
 
@@ -205,6 +205,8 @@ agents:
       skills: [pr-reviewer]
 ```
 
+The configured key under `agents:` is the runnable agent name and the value used by `spawn_agent(agent="...")`. `AGENT.md` supplies the prompt body and optional human-facing description.
+
 Each agent can override any of the `defaults` execution knobs plus transport and permissions.
 
 | Field | Default | Notes |
@@ -212,7 +214,7 @@ Each agent can override any of the `defaults` execution knobs plus transport and
 | `models` | inherit from `defaults.models` | Fallback chain for this agent |
 | `thinking` | inherit from `defaults.thinking` | Simple reasoning level |
 | `max_iterations` | inherit from `defaults.max_iterations` | Max tool loop depth |
-| `context_ratio` | inherit from `defaults.context_ratio` | History budget fraction |
+| `context_ratio` | inherit from `defaults.context_ratio` | Live request budget fraction |
 | `max_output_tokens` | inherit from `defaults.max_output_tokens` | Output token cap |
 | `transport` | none | Makes the agent reachable from Slack |
 | `permissions` | none | Optional flat allow-lists for tools and skills |

@@ -7,6 +7,10 @@ description: "Release history for Operator"
 
 - Public docs now describe the `operator init` bootstrap flow instead of the removed `operator setup` wizard.
 - Public docs now match the current Slack transport config shape (`transport.env` and `transport.settings`), the closed-by-default permissions model, and the current memory/state CLI surface.
+- Public docs now describe configured agent keys as the runtime source of truth, with `AGENT.md` contributing prompt body and human-facing description.
+- Public docs now describe `spawn_agent(...)` as a fresh isolated child run for both same-agent and cross-agent delegation.
+- Public docs now describe `context_ratio` as full-request budgeting, including tool schemas and multimodal payloads.
+- Public docs now clarify that prompt/job context and job hooks use the active `OPERATOR_HOME` for the loaded config.
 
 <Note>
   Older changelog entries describe the product as it existed in those releases. Current behavior is documented in the rest of this site.

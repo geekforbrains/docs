@@ -117,7 +117,7 @@ Job hooks receive:
 | `JOB_NAME` | current job name |
 | `JOB_DIR` | absolute path to the job directory |
 | `OPERATOR_AGENT` | agent running the job |
-| `OPERATOR_HOME` | Operator base directory |
+| `OPERATOR_HOME` | Active Operator base directory for the loaded config |
 | `OPERATOR_DB` | path to `operator.db` |
 
 The hook working directory is the job directory. Hook timeout comes from `defaults.hook_timeout` and defaults to `30` seconds.

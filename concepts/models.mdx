@@ -10,6 +10,7 @@ Operator uses LiteLLM model IDs like `anthropic/claude-sonnet-4-6` or `openai/gp
 - `models:` is a fallback chain, not a single preferred value.
 - Fallback happens on every live model call.
 - `thinking:` is `off|low|medium|high`.
+- `context_ratio` budgets the full outbound request shape, including tool schemas.
 - Jobs inherit `thinking`, `context_ratio`, and `max_output_tokens` from the resolved agent.
 - Jobs may override `model` and `max_iterations`, but not `thinking`.
 
@@ -70,8 +71,8 @@ When a response includes provider-specific reasoning metadata, Operator strips t
 | Execution type | Models | Thinking | Other execution settings |
 | --- | --- | --- | --- |
 | Chat | agent override or `defaults.models` | agent override or `defaults.thinking` | `max_iterations`, `context_ratio`, and `max_output_tokens` resolve the same way |
-| `spawn_agent()` without `agent=` | inherit current run context | inherit current run context | inherit current run context, but sub-agent `max_iterations` is capped at `10` |
-| `spawn_agent(agent="other")` | switch to target agent | switch to target agent | switch to target agent config, but sub-agent `max_iterations` is capped at `10` |
+| `spawn_agent()` without `agent=` | current agent models | current agent thinking | fresh isolated child run of the current agent with its own prompt, memory, state, skills, and workspace; sub-agent `max_iterations` is capped at `10` |
+| `spawn_agent(agent="other")` | target agent models | target agent thinking | fresh isolated child run of the target agent with its own prompt, memory, state, skills, and workspace; sub-agent `max_iterations` is capped at `10` |
 | Scheduled job | `job.model` or resolved agent models | resolved agent thinking | resolved agent `context_ratio` and `max_output_tokens` |
 
 ## Jobs
@@ -99,13 +100,14 @@ If you need a different thinking level for a job, point the job at a different a
 
 ## `context_ratio`
 
-`context_ratio` controls how aggressively Operator trims stored history before each model call.
+`context_ratio` controls how aggressively Operator trims the live request before each model call.
 
 - higher values keep more history
 - lower values reduce token usage
+- the budget is measured against the full outbound payload: system prompt, conversation messages, multimodal content, and tool schemas
 - the value must be greater than `0` and at most `1`
 
-The system prompt and latest user exchange are preserved first; older exchanges are the first thing dropped.
+The system prompt and latest user exchange are preserved first; older exchange groups are the first thing dropped.
 
 ## Related Docs
 
