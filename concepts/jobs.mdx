@@ -185,6 +185,20 @@ operator job list
 operator job info daily-summary
 ```
 
+## Scheduling And Overlap
+
+The scheduler ticks once per minute.
+
+When multiple jobs target the same agent, Operator does not run them in parallel. It creates a per-agent FIFO queue and runs those jobs one at a time.
+
+Why this matters:
+
+- one agent does not compete with itself for the same workspace, memory, and state
+- separate agents can still run jobs concurrently
+- a long-running job does not block unrelated agents
+
+If a job's next scheduled time arrives while that same job is still running, Operator skips that run and increments the job's `skip_count` instead of starting a second copy.
+
 ## Run A Job Manually
 
 ```sh

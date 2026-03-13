@@ -140,6 +140,13 @@ save_note(
 
 Expired items do not disappear silently. Operator moves them into `trash/`.
 
+There are two behaviors to know:
+
+- expired notes stop appearing in normal reads, lists, and searches as soon as their `expires_at` passes
+- a background sweep moves expired files into `trash/` about once per hour while the runtime is running
+
+That means expiry takes effect immediately for normal use, even if the file has not been physically moved to `trash/` yet.
+
 ## Forgetting Memory
 
 `forget_rule` and `forget_note` do not hard-delete files. They move them into the relevant `trash/` directory and remove them from the search index.

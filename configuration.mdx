@@ -26,7 +26,9 @@ Everything else is there when you need it.
 
 Config models are strict. Unknown keys fail fast instead of silently doing nothing.
 
-## Full Example
+## Start From The Scaffold
+
+This is the starter shape `operator init` writes today. It is intentionally permissive so you can prove the runtime works before you tighten permissions and split agents.
 
 ```yaml
 runtime:
@@ -37,23 +39,56 @@ runtime:
 defaults:
   models:
     - "anthropic/claude-sonnet-4-6"
-    - "openai/gpt-4.1"
-  thinking: medium
+  thinking: off
   max_iterations: 25
   context_ratio: 0.5
-  max_output_tokens: null
   hook_timeout: 30
-  embeddings:
-    model: "openai/text-embedding-3-small"
-    dimensions: 1536
 
 permission_groups:
+  memory:
+    - save_rule
+    - save_note
+    - search_notes
+    - list_rules
+    - list_notes
+    - read_note
+    - forget_rule
+    - forget_note
   files:
     - read_file
     - write_file
     - list_files
+  messaging:
+    - send_message
+    - send_file
+  skills:
+    - create_skill
+    - update_skill
+    - delete_skill
+    - list_skills
+    - read_skill
+    - run_skill
+  jobs:
+    - create_job
+    - update_job
+    - delete_job
+    - enable_job
+    - disable_job
+    - list_jobs
+  state:
+    - get_state
+    - set_state
+    - append_state
+    - pop_state
+    - delete_state
+    - list_state
+  shell:
+    - run_shell
   web:
     - web_fetch
+  users:
+    - manage_users
+    - set_timezone
   agents:
     - spawn_agent
 
@@ -73,20 +108,18 @@ agents:
         inject_users_into_prompt: true
         expand_mentions: true
 
-  researcher:
-    models:
-      - "openai/o3"
-    thinking: high
-    permissions:
-      tools: [@files, @web, read_skill, run_skill, @agents]
-      skills: [docs-auditor]
-
 roles:
-  team:
-    agents: [operator, researcher]
   guest:
     agents: []
 ```
+
+Why the scaffold looks this way:
+
+- it gives the first `operator` agent full tool and skill access so setup friction is low
+- it seeds reusable permission groups so later agents can use `@files`, `@web`, `@agents`, and similar bundles instead of long lists
+- it keeps the runtime Slack-first because Slack is the only transport in the current code
+
+Once the first run works, start narrowing permissions and adding specialist agents. The rest of this page explains each section in detail.
 
 ## `runtime`
 
@@ -170,17 +203,23 @@ Permission groups keep agent permissions readable.
 
 ```yaml
 permission_groups:
+  memory:
+    - save_rule
+    - save_note
   files:
     - read_file
     - write_file
     - list_files
+  messaging:
+    - send_message
+    - send_file
   web:
     - web_fetch
 
 agents:
   researcher:
     permissions:
-      tools: [@files, @web, run_shell]
+      tools: [@memory, @files, @messaging, @web, run_shell]
 ```
 
 Unknown `@group` names are warned about during permission expansion and do not grant access.

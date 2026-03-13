@@ -33,7 +33,7 @@ python3 -m operator_ai init
 - `~/.operator/SYSTEM.md`
 - `~/.operator/agents/operator/AGENT.md`
 
-It also creates the default layout for jobs, skills, shared files, logs, memory, state, and the starter `operator` agent workspace.
+It also creates the default layout for `db/`, jobs, skills, shared files, logs, memory, state, and the starter `operator` agent workspace.
 
 The generated config is intentionally permissive for the first run:
 
@@ -41,7 +41,7 @@ The generated config is intentionally permissive for the first run:
 - full tool access
 - full skill access
 - Slack transport wired through env vars
-- starter `permission_groups` you can reuse later
+- starter `permission_groups` for memory, files, messaging, jobs, skills, state, shell, web, users, and agents
 
 If `operator.yaml` already exists, `operator init` prompts before overwriting it. Use `operator init --force` to replace `operator.yaml` without touching your existing `.env` or `AGENT.md` files.
 
@@ -142,7 +142,7 @@ Slack sessions are intentionally thread-scoped:
 - a top-level channel mention starts a new thread session
 - later replies count as new input only when they mention the agent again
 
-If you send `stop` or `cancel`, Operator cancels the in-flight request for that conversation.
+If you send `stop` or `cancel`, Operator handles that directly instead of passing it to the model. During an active run it first replies `Cancelling...`, then posts `Request stopped.` once the request has actually been cancelled.
 
 ## 7. Run The First Checks
 

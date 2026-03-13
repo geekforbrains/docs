@@ -169,6 +169,18 @@ That message:
 - does not go to the model
 - cancels the active request for that conversation if one exists
 
+If the conversation is active, Operator first replies:
+
+```text
+Cancelling...
+```
+
+and then, once the task has been cancelled:
+
+```text
+Request stopped.
+```
+
 If the conversation is idle, Operator replies:
 
 ```text

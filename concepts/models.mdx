@@ -108,6 +108,18 @@ When the request is too large, Operator preserves:
 
 Then it trims older conversation history first.
 
+## Tool Result Compression
+
+Before older history is dropped for budget reasons, Operator also compresses old tool results.
+
+Current behavior:
+
+- the newest `5` tool results are kept as-is
+- the next `10` are soft-trimmed to the start and end with a marker in the middle
+- older tool results are replaced with a placeholder
+
+This keeps long tool-heavy conversations from bloating context while preserving the most recent execution details.
+
 ## Time-Aware Message History
 
 User messages, job prompts, and sub-agent task messages carry their creation time into model input.
