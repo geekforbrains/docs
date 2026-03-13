@@ -1,203 +1,186 @@
 ---
 title: "Agents"
-description: "Prompt files, workspaces, permissions, delegation, and prompt assembly"
+description: "Prompt files, workspaces, permissions, inheritance, and delegation"
 ---
 
-Each agent lives at `~/.operator/agents/<name>/AGENT.md` and gets its own workspace at `~/.operator/agents/<name>/workspace/`.
+Each agent is a named runtime identity from `operator.yaml`. The agent's human-authored prompt lives at `~/.operator/agents/<name>/AGENT.md`.
 
-The configured key under `agents:` in `operator.yaml` is the agent's runtime identity and source of truth.
+Use agents when you want different tool access, different models, different roles, or a different charter.
 
-## Scan First
+## Two Files Define An Agent
 
-- `AGENT.md` may include optional YAML frontmatter.
-- The configured `agents:` key is the runnable agent name; frontmatter only adds human-facing metadata.
-- The markdown body becomes the stable agent prompt.
-- Agents inherit models and execution settings from `defaults` unless overridden.
-- Permissions are closed by default. No `permissions` block means no tools and no skills.
-- Agents without a transport are headless: usable for jobs and `spawn_agent(...)`, not direct chat.
+1. `operator.yaml` defines the runnable identity and execution settings.
+2. `AGENT.md` defines the human-authored instructions.
 
-## Minimal Agent
-
-```markdown
----
-description: Investigates technical questions and summarizes findings.
----
-
-You are a research-focused agent.
-Prioritize primary sources, concise summaries, and practical next steps.
-```
-
-Register the agent in `operator.yaml`:
+Example config:
 
 ```yaml
 agents:
+  operator:
+    permissions:
+      tools: "*"
+      skills: "*"
+    transport:
+      type: slack
+      env:
+        bot_token: SLACK_BOT_TOKEN
+        app_token: SLACK_APP_TOKEN
+
   researcher:
     models:
       - "openai/o3"
     thinking: high
     permissions:
-      tools: [web_fetch, read_skill, run_skill]
-      skills: [pr-reviewer]
+      tools: [read_file, write_file, list_files, web_fetch, read_skill, run_skill]
+      skills: [docs-auditor]
 ```
 
-The configured key `researcher` is the name used by `spawn_agent(agent="researcher")` and by the injected peer-agent list.
+Example `AGENT.md`:
 
-Add a `transport:` block if you want the agent reachable in Slack.
+```yaml
+---
+description: Deep research agent with web access.
+---
 
-## Frontmatter
+You are a research specialist. Work methodically, cite sources in summaries,
+and write long-form notes into the workspace when the task needs intermediate artifacts.
+```
 
-| Field | Required | What it does |
-| --- | --- | --- |
-| `description` | no | Human-facing text shown in `operator agents` and in the injected "Available Agents" list |
-| `name` | no | Optional self-label only; if present it should match the configured agent key, but Operator does not use it as runtime identity |
+Important distinction:
 
-Operator injects all configured peer agents into the "Available Agents" list. `description` is the human-facing text for that list and for `operator agents`.
+- the configured key such as `researcher` is the real runtime name
+- `AGENT.md` frontmatter contributes human-facing metadata, especially `description`
 
-If `description` is missing, Operator still keeps the agent visible so the prompt surface stays aligned with `config.agents`.
+If `AGENT.md` is missing or malformed, the agent still exists because config is the source of truth.
 
-Agents the current user cannot access still appear in that list, but they are marked inaccessible so the model can explain the restriction instead of pretending the agent does not exist.
+## What An Agent Gets
 
-The frontmatter is stripped before prompt injection. The LLM sees only the markdown body.
+Every agent has its own:
 
-## Workspace
+- `AGENT.md`
+- workspace at `agents/<name>/workspace/`
+- memory at `agents/<name>/memory/`
+- state directory at `agents/<name>/state/`
+- tool permission filter
+- skill permission filter
+- model and execution settings
 
-Each agent runs with:
+The runtime also creates `workspace/shared` as a symlink to `~/.operator/shared/` so agents can exchange files without writing directly into each other's work directories.
 
-- working directory: `~/.operator/agents/<name>/workspace/`
-- prompt file: `~/.operator/agents/<name>/AGENT.md`
-- shared directory symlink: `workspace/shared -> ~/.operator/shared/`
+## Workspace Layout
 
-The default workspace layout includes:
+```text
+agents/<name>/workspace/
+├── inbox/
+├── work/
+├── artifacts/
+├── tmp/
+└── shared -> ~/.operator/shared/
+```
 
-- `inbox/` for inbound files and imported source material
-- `work/` for active files and intermediate outputs
-- `artifacts/` for final deliverables
-- `tmp/` for disposable scratch files
-- `shared/` for cross-agent file sharing
+Purpose of each directory:
 
-This workspace is used by:
+- `inbox/`: inbound attachments and imported reference files
+- `work/`: active drafts and intermediate files
+- `artifacts/`: finished deliverables
+- `tmp/`: disposable scratch files
+- `shared/`: cross-agent file exchange
 
-- `run_shell`
-- `read_file`
-- `write_file`
-- `list_files`
-- `send_file`
-- `run_skill` subprocesses
-
-Files persist across chat turns and job runs.
-
-File tools default to the workspace for relative paths, but they are not sandboxed. Absolute paths still work unless you remove the relevant file tools via permissions.
+When Slack attachments arrive, Operator saves them into `inbox/`. Small images are also sent to the model as inline image content.
 
 ## Prompt Assembly
 
-Operator assembles the system prompt in a fixed order.
+On each run, Operator builds the system prompt from broad to narrow:
 
-### Stable prefix
+1. `SYSTEM.md`
+2. the active agent's `AGENT.md` body
+3. discovered skill metadata the agent is allowed to see
+4. configured peer-agent descriptions
+5. transport or job context
+6. active rules from memory
 
-1. `~/.operator/SYSTEM.md`
-2. the agent prompt body from `AGENT.md`
-3. discovered skills (`name` and `description`)
-4. configured peer agents (configured name + `AGENT.md` description)
+Why this matters:
 
-### Dynamic suffix
+- common behavior lives in `SYSTEM.md`
+- agent-specific behavior lives in `AGENT.md`
+- rules stay dynamic and editable without rewriting the base prompt
+- the stable prefix stays cache-friendly while the dynamic suffix changes per run
 
-1. run envelope for the current execution mode
-2. global, agent, and user rule memory
-
-For chat runs, the run envelope includes transport prompt content plus resolved session context such as platform, user, channel/thread semantics, and timezone. For job runs, it includes job context plus generic transport prompt content when the target agent has a transport.
-
-Per-turn context blocks such as Slack thread snapshots, system events, message metadata, and the current inbound message are carried in the message list instead of being baked into the stable system prompt.
-
-Stable and dynamic sections are separated by an internal cache boundary. On Anthropic models, Operator uses that split to apply prompt caching safely.
-
-## Message Timestamp Rendering
-
-Operator stores a nullable `created_at` separately from message content and only stamps `user` messages when building a live model request.
-
-That means:
-
-- chat turns get their inbound message time rendered into the prompt
-- scheduled jobs get their run-start time rendered onto the job body
-- `spawn_agent(...)` gets the child task time rendered onto the sub-agent's initial `user` message
-
-The rendered format uses the authenticated user's timezone when available, otherwise UTC, for example:
-
-```text
-[Monday, 2026-03-09T09:22:40-07:00]
-```
-
-Assistant, tool, and system messages are not stamped. Older stored messages with `null` `created_at` remain unchanged.
+If you edit `AGENT.md`, the next request uses the new prompt content. There is no special publish step.
 
 ## Permissions
 
+Agent permissions are an allowlist.
+
+- no `permissions` block means no tools and no skills
+- `tools: "*"` means all built-in and runtime-added tools
+- `skills: "*"` means all discovered skills
+- lists restrict access to named tools or named skills
+
+Example:
+
 ```yaml
-agents:
-  researcher:
-    permissions:
-      tools: [@files, web_fetch, read_skill, run_skill, spawn_agent]
-      skills: [pr-reviewer]
+permissions:
+  tools: [read_file, write_file, list_files, web_fetch, spawn_agent]
+  skills: [docs-auditor]
 ```
 
-Permissions are flat allow-lists.
-
-| Config | Result |
-| --- | --- |
-| omitted | deny all |
-| `null` | deny all |
-| `"*"` | allow everything |
-| list | only listed names are visible |
-
-`@group` entries expand through `permission_groups` in `operator.yaml`.
-
-Tool permissions and skill permissions are independent.
-
-## Sub-Agents
-
-`spawn_agent(task, context="", agent="")` creates a fresh isolated child run and returns its final response.
-
-Behavior depends on whether `agent=` is provided:
-
-- no `agent`: start a fresh isolated run of the current agent
-- `agent="other"`: start a fresh isolated run of the target agent using that agent's own prompt, memory, state, skills, workspace, and permissions
-
-Only the delegated `task` and optional `context` become new child input. The parent conversation history is not inherited automatically.
-
-Delegation preserves the current run mode:
-
-- chat-triggered child runs keep the current session envelope, including current channel/thread bindings
-- job-triggered child runs stay in job mode and do not gain synthetic user/chat context
-
-That preserved envelope is runtime context only. The child still runs with the target agent's own tools, skills, models, workspace, and permissions.
-
-Cross-agent spawns still check the current user's role-based access before running when a user context exists. Jobs do not run with a user context, so job-triggered delegation skips user-level access checks but still uses the target agent's capability limits.
-
-Operational limits:
-
-- max depth is `3`
-
-The child run's initial `user` message is timestamp-rendered the same way as chat and job requests.
+This separation is deliberate. Skills are reusable knowledge. Tools are executable capabilities.
 
 ## Headless Agents
 
-Agents without a `transport` block are still useful for:
+An agent does not need a transport block to be useful.
+
+Headless agents work well for:
 
 - scheduled jobs
-- `spawn_agent(agent="...")`
-- shared model and prompt presets
+- `spawn_agent(...)` delegation
+- specialist agents that should not be directly reachable by humans
 
-<Warning>
-  The long-running `operator` service still requires at least one transported agent somewhere in config. Headless-only configs cannot start the runtime.
-</Warning>
+Current runtime detail: the process still needs at least one transport somewhere in `operator.yaml` or startup exits. A headless agent is valid, but a fully headless deployment is not.
 
-## In Existing Slack Threads
+## Inheritance
 
-When an agent is first mentioned inside an existing Slack thread, Operator may inject a one-time snapshot of earlier thread replies so the model can see what happened before it joined. That snapshot is request-only and not treated as direct user input.
+Per-agent overrides are optional. When omitted, the agent inherits from `defaults`.
 
-Slack sessions remain thread-scoped and mention-gated in channels. The thread root is the conversation boundary, but unmentioned human replies inside that thread are ambient conversation, not new agent input. If the agent needs that extra thread context, it should read it deliberately with Slack tools.
+| Setting | Resolution |
+| --- | --- |
+| `models` | agent override or `defaults.models` |
+| `thinking` | agent override or `defaults.thinking` |
+| `max_iterations` | agent override or `defaults.max_iterations` |
+| `context_ratio` | agent override or `defaults.context_ratio` |
+| `max_output_tokens` | agent override or `defaults.max_output_tokens` |
 
-## Related Docs
+Use a separate agent when you need a materially different execution profile. That keeps the config understandable and makes delegation explicit.
 
-- [Configuration](/configuration)
-- [Models & Thinking](/concepts/models)
-- [Built-in Tools](/concepts/tools)
-- [Slack](/transports/slack)
+## Delegation With `spawn_agent`
+
+`spawn_agent(task, context="", agent="")` starts a fresh child run.
+
+Two modes:
+
+- omit `agent` to start a fresh run of the current agent
+- set `agent="other-agent"` to switch to that target agent's own prompt, workspace, memory, tools, skills, and permissions
+
+What carries over:
+
+- the current run envelope
+- user access restrictions
+- the current job or Slack session context
+
+What does not carry over:
+
+- parent conversation history
+- parent tool state beyond what the child agent naturally has
+
+Depth is capped at `3` to prevent runaway recursion.
+
+## A Good Default Multi-Agent Pattern
+
+This is the simplest useful split:
+
+- `operator`: Slack-facing, broad coordination, safe tool surface
+- `researcher`: headless, strong model, focused research instructions
+- `reviewer`: headless, narrow code-review or QA instructions
+
+That gives you clean delegation boundaries without turning one agent into a giant prompt with every responsibility mixed together.

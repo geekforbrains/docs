@@ -1,18 +1,9 @@
 ---
 title: "Models & Thinking"
-description: "Fallback chains, reasoning levels, max tokens, and inheritance"
+description: "Fallback chains, reasoning levels, context trimming, and per-run inheritance"
 ---
 
-Operator uses LiteLLM model IDs like `anthropic/claude-sonnet-4-6` or `openai/gpt-4.1`.
-
-## Scan First
-
-- `models:` is a fallback chain, not a single preferred value.
-- Fallback happens on every live model call.
-- `thinking:` is `off|low|medium|high`.
-- `context_ratio` budgets the full outbound request shape, including tool schemas.
-- Jobs inherit `thinking`, `context_ratio`, and `max_output_tokens` from the resolved agent.
-- Jobs may override `model` and `max_iterations`, but not `thinking`.
+Operator uses LiteLLM model IDs such as `anthropic/claude-sonnet-4-6` or `openai/gpt-4.1`.
 
 ## Fallback Chains
 
@@ -23,27 +14,21 @@ defaults:
     - "openai/gpt-4.1"
 ```
 
-Behavior:
+`models` is a fallback chain, not just a preference list.
 
-1. Operator tries the first model.
-2. If the call errors or returns an unusable response, it retries the same request with the next model.
-3. If a later model succeeds, the run continues normally.
+Per model call, Operator:
 
-Fallback is evaluated per live call, not per conversation. A long conversation may use different models on different turns if failures occur.
+1. tries the first model
+2. retries the same request with the next model if the current one errors or returns an unusable response
+3. continues with the first model that returns a valid message
 
-An unusable response means the provider returned a syntactically successful result that does not contain the required completion payload, for example an empty `choices` list.
+Fallback happens per live call, not per conversation. One conversation can use different providers on different turns if failures occur.
 
 ## Thinking Levels
 
 ```yaml
 defaults:
   thinking: off
-
-agents:
-  researcher:
-    models:
-      - "openai/o3"
-    thinking: high
 ```
 
 Supported values:
@@ -53,66 +38,82 @@ Supported values:
 - `medium`
 - `high`
 
-Operator maps these to LiteLLM reasoning controls when the current model supports them:
+Operator maps these to provider reasoning controls when the model supports them. When the model does not support reasoning control, Operator drops the provider-specific parameter and continues.
 
-| Operator | LiteLLM |
-| --- | --- |
-| `off` | no reasoning request; usually `reasoning_effort="none"`, but omitted for Anthropic compatibility |
-| `low` | `reasoning_effort="low"` |
-| `medium` | `reasoning_effort="medium"` |
-| `high` | `reasoning_effort="high"` |
+Important implementation detail:
 
-If the current model does not support reasoning controls, Operator omits the parameter and continues.
+- for Anthropic models, `thinking: off` omits `reasoning_effort` entirely for compatibility
+- for other supported models, `off` generally maps to `reasoning_effort="none"`
 
-## Cross-Provider Safety
+## OpenAI Responses Bridge
 
-When a response includes provider-specific reasoning metadata, Operator strips that metadata from assistant history before the next model call. This keeps Anthropic-to-OpenAI or OpenAI-to-other-provider fallbacks from breaking on incompatible history payloads.
+When a model both:
+
+- supports reasoning controls
+- and the run includes tools
+
+Operator may switch OpenAI requests onto LiteLLM's Responses bridge automatically.
+
+Why this exists:
+
+- it keeps tool use and reasoning control working together more reliably on supported OpenAI models
+
+You still configure the model normally. The bridge selection is internal request logic.
 
 ## Inheritance Rules
 
 | Execution type | Models | Thinking | Other execution settings |
 | --- | --- | --- | --- |
-| Chat | agent override or `defaults.models` | agent override or `defaults.thinking` | `max_iterations`, `context_ratio`, and `max_output_tokens` resolve the same way |
-| `spawn_agent()` without `agent=` | current agent models | current agent thinking | fresh child run of the current agent; preserves the current run mode and session/job envelope, but not parent conversation history |
-| `spawn_agent(agent="other")` | target agent models | target agent thinking | fresh child run of the target agent with that agent's own prompt, memory, state, skills, workspace, and permissions; preserves the current run mode and session/job envelope, but not parent conversation history |
-| Scheduled job | `job.model` or resolved agent models | resolved agent thinking | resolved agent `context_ratio` and `max_output_tokens` |
+| Chat run | agent override or `defaults.models` | agent override or `defaults.thinking` | agent override or defaults |
+| `spawn_agent()` without `agent=` | current agent | current agent | current agent |
+| `spawn_agent(agent="other")` | target agent | target agent | target agent |
+| Job run | `job.model` or resolved agent models | resolved agent thinking | resolved agent settings, except `job.max_iterations` may override |
 
-## Jobs
-
-Job frontmatter supports:
+Jobs may override:
 
 - `model`
 - `max_iterations`
 
-It does **not** support:
+Jobs do not override:
 
 - `thinking`
 - `context_ratio`
 - `max_output_tokens`
 
-If you need a different thinking level for a job, point the job at a different agent.
-
 ## `max_output_tokens`
 
-`max_output_tokens` sets LiteLLM `max_tokens` for each call.
+`max_output_tokens` controls the per-call `max_tokens` value sent through LiteLLM.
 
-- if configured: Operator uses your explicit value
-- if `null`: Operator asks LiteLLM for the model's max output size and uses that when available
-- if LiteLLM cannot resolve a max: the parameter is omitted
+Behavior:
+
+- if you set it explicitly, Operator uses your value
+- if it is `null`, Operator asks LiteLLM for the model's max output size
+- if LiteLLM cannot resolve a max, Operator omits the parameter
 
 ## `context_ratio`
 
-`context_ratio` controls how aggressively Operator trims the live request before each model call.
+`context_ratio` controls how much of the model window Operator is willing to spend on live request context before each model call.
 
-- higher values keep more history
-- lower values reduce token usage
-- the budget is measured against the full outbound payload: system prompt, conversation messages, multimodal content, and tool schemas
-- the value must be greater than `0` and at most `1`
+That budget includes:
 
-The system prompt and latest user exchange are preserved first; older exchange groups are the first thing dropped.
+- conversation history
+- multimodal content
+- tool schemas
+- the rest of the outbound request payload
 
-## Related Docs
+When the request is too large, Operator preserves:
 
-- [Configuration](/configuration)
-- [Agents](/concepts/agents)
-- [Jobs](/concepts/jobs)
+- the system prompt
+- the newest exchange groups
+
+Then it trims older conversation history first.
+
+## Cross-Provider History Safety
+
+When provider-specific reasoning metadata appears in assistant history, Operator strips that provider-specific content before the next call.
+
+Why it matters:
+
+- Anthropic-to-OpenAI or OpenAI-to-other-provider fallback should not break because one provider stored incompatible reasoning blocks in history
+
+This is one of the pieces that makes cross-provider fallback workable in longer runs.

@@ -1,17 +1,30 @@
 ---
 title: "Configuration"
-description: "Accurate reference for ~/.operator/operator.yaml"
+description: "Guide and reference for ~/.operator/operator.yaml"
 ---
 
 Runtime config lives at `~/.operator/operator.yaml`.
 
-## Scan First
+Start with the generated file from `operator init`. Most teams only need to change four things at first:
 
-- `defaults.models` is required and must contain at least one LiteLLM model string.
-- `admin` is a built-in role and cannot be defined under `roles:`.
-- Agent permissions are closed by default. If an agent has no `permissions` block, it gets no tools and no skills.
-- Slack is the only supported `transport.type` right now.
-- Memory is file-backed. Optional embeddings are configured under `defaults.embeddings`.
+1. `defaults.models`
+2. the body of `AGENT.md`
+3. `roles`
+4. agent `permissions`
+
+Everything else is there when you need it.
+
+## Mental Model
+
+`operator.yaml` has five top-level sections:
+
+- `runtime`: process-level behavior such as `.env` loading and rejection policy
+- `defaults`: model and execution defaults inherited by agents
+- `permission_groups`: named bundles you can reference as `@group`
+- `agents`: the runnable agents
+- `roles`: which humans can talk to which agents
+
+Unknown keys are rejected. The config models are strict, so typos fail fast instead of silently doing nothing.
 
 ## Full Example
 
@@ -65,8 +78,8 @@ agents:
       - "openai/o3"
     thinking: high
     permissions:
-      tools: [@files, @web, run_shell, read_skill, run_skill, @agents]
-      skills: [pr-reviewer]
+      tools: [@files, @web, read_skill, run_skill, @agents]
+      skills: [docs-auditor]
 
 roles:
   team:
@@ -84,21 +97,19 @@ runtime:
   reject_response: ignore
 ```
 
-| Field | Default | What it does |
+| Field | Default | Meaning |
 | --- | --- | --- |
-| `env_file` | `null` | Optional `.env` file path. Relative paths resolve from the config file directory |
-| `show_usage` | `false` | Sends a usage summary after each completed chat response |
-| `reject_response` | `ignore` | Unknown or unauthorized user behavior: `ignore` or `announce` |
+| `env_file` | `null` | optional dotenv-style file path |
+| `show_usage` | `false` | posts token usage after successful chat replies |
+| `reject_response` | `ignore` | what to do when an unknown or unauthorized user messages an agent: `ignore` or `announce` |
 
-<Note>
-  There is no `runtime.timezone` setting in current Operator. Timezone is stored on each user record and can be set in chat with `set_timezone("America/Vancouver")`. Live user-message timestamps render in that user timezone when available. Jobs run without a user context and therefore render in UTC.
-</Note>
+Technical details:
 
-### `runtime.env_file`
+- relative `env_file` paths resolve from the config file directory
+- `~` expansion is supported
+- loaded values do not overwrite environment variables already set in the shell
 
-- Paths support `~` expansion.
-- Relative paths resolve from the config file directory.
-- Existing environment variables are not overwritten by the file.
+There is no runtime-wide timezone setting. User timezone is stored per user record and can be set during chat with `set_timezone("America/Vancouver")`.
 
 ## `defaults`
 
@@ -114,34 +125,22 @@ defaults:
   embeddings: null
 ```
 
-| Field | Default | What it does |
+| Field | Default | Meaning |
 | --- | --- | --- |
-| `models` | required | Fallback chain of LiteLLM model IDs |
-| `thinking` | `off` | Reasoning level: `off`, `low`, `medium`, `high` |
-| `max_iterations` | `25` | Max model/tool loop iterations |
-| `context_ratio` | `0.5` | Fraction of the model input window Operator is willing to spend on live request context before each call. Must be greater than `0` and at most `1`. |
-| `max_output_tokens` | `null` | Per-call output cap. `null` means “use the model max when LiteLLM can resolve it” |
-| `hook_timeout` | `30` | Timeout in seconds for job prerun/postrun hooks |
-| `embeddings` | `null` | Optional embedding model config for semantic note search via `sqlite-vec` |
+| `models` | required | fallback chain of LiteLLM model IDs |
+| `thinking` | `off` | reasoning level: `off`, `low`, `medium`, `high` |
+| `max_iterations` | `25` | max LLM/tool loop iterations |
+| `context_ratio` | `0.5` | fraction of the model input window Operator will spend on live request context |
+| `max_output_tokens` | `null` | explicit per-call output cap; otherwise Operator asks LiteLLM for model max output when available |
+| `hook_timeout` | `30` | timeout in seconds for job prerun and postrun hooks |
+| `embeddings` | `null` | optional semantic note-search config |
 
-### `models`
+Important behavior:
 
-- Uses LiteLLM format: `provider/model-name`
-- The first model is preferred
-- Later models are fallbacks for live request failures or unusable responses
-
-Operator also accepts a singular `model:` key in `defaults` or per-agent config and normalizes it into `models: [...]`. The docs use list form because that is the real fallback surface.
-
-### `context_ratio`
-
-When a live request exceeds the model budget, Operator:
-
-1. measures the full outbound payload, including messages and tool schemas
-2. keeps the system prompt
-3. keeps the latest user exchange
-4. drops older exchange groups first
-
-There is no special `0` value. `context_ratio` must be greater than `0`.
+- `models` is a fallback chain, not just a preferred model
+- the singular alias `model:` is accepted and normalized to `models: [...]`
+- `context_ratio` must be greater than `0` and at most `1`
+- when `thinking` is unsupported by the concrete model, Operator drops the provider-specific control and continues
 
 ### `embeddings`
 
@@ -152,14 +151,18 @@ defaults:
     dimensions: 1536
 ```
 
-When configured, Operator builds vector embeddings for note memories and combines them with the SQLite FTS5 index under `~/.operator/db/memory_index.db`.
+This enables vector embeddings for note search alongside SQLite FTS5.
 
-| Field | Default | Notes |
-| --- | --- | --- |
-| `model` | required | LiteLLM embedding model ID |
-| `dimensions` | `1536` | Vector size for the sqlite-vec table |
+Requirements:
 
-If `sqlite-vec` is not installed, Operator logs a warning and continues with FTS-only note search.
+- configure an embedding model
+- install the optional dependency:
+
+```sh
+pip install sqlite-vec
+```
+
+If `sqlite-vec` is missing, Operator logs a warning and continues with FTS-only search.
 
 ## `permission_groups`
 
@@ -173,7 +176,7 @@ permission_groups:
     - web_fetch
 ```
 
-Permission groups are named bundles you can reference as `@group` in an agent's permission lists.
+Permission groups are named bundles referenced as `@group` inside an agent's permission lists:
 
 ```yaml
 agents:
@@ -182,69 +185,69 @@ agents:
       tools: [@files, @web, run_shell]
 ```
 
-Unknown groups log a warning and are ignored.
+This keeps agent permissions readable and makes it easier to share the same tool bundles across multiple agents.
 
 ## `agents`
+
+Each key under `agents:` is a runnable identity. That key is the source of truth for the runtime name.
 
 ```yaml
 agents:
   operator:
     models:
       - "anthropic/claude-sonnet-4-6"
-    thinking: medium
-    max_iterations: 40
-    context_ratio: 0.4
-    max_output_tokens: 4096
+    thinking: off
+    max_iterations: 25
+    context_ratio: 0.5
+    max_output_tokens: null
+    permissions:
+      tools: "*"
+      skills: "*"
     transport:
       type: slack
       env:
         bot_token: SLACK_BOT_TOKEN
         app_token: SLACK_APP_TOKEN
-    permissions:
-      tools: [read_file, list_files, web_fetch]
-      skills: [pr-reviewer]
+      settings:
+        include_archived_channels: false
+        inject_channels_into_prompt: true
+        inject_users_into_prompt: true
+        expand_mentions: true
 ```
 
-The configured key under `agents:` is the runnable agent name and the value used by `spawn_agent(agent="...")`. `AGENT.md` supplies the prompt body and optional human-facing description.
+Per-agent overrides are optional. If a field is omitted, Operator falls back to `defaults`.
 
-Each agent can override any of the `defaults` execution knobs plus transport and permissions.
+### Permissions
 
-| Field | Default | Notes |
-| --- | --- | --- |
-| `models` | inherit from `defaults.models` | Fallback chain for this agent |
-| `thinking` | inherit from `defaults.thinking` | Simple reasoning level |
-| `max_iterations` | inherit from `defaults.max_iterations` | Max tool loop depth |
-| `context_ratio` | inherit from `defaults.context_ratio` | Live request budget fraction |
-| `max_output_tokens` | inherit from `defaults.max_output_tokens` | Output token cap |
-| `transport` | none | Makes the agent reachable from Slack |
-| `permissions` | none | Optional flat allow-lists for tools and skills |
+Permissions are closed by default.
 
-Agents without a `transport` block are headless: they can still be used for jobs and `spawn_agent(...)`, but they are not directly reachable in chat.
+- no `permissions` block means no tools and no skills
+- `tools: "*"` or `skills: "*"` means full access
+- lists are allowlists
 
-<Warning>
-  The long-running `operator` service still requires at least one agent with a transport. A config containing only headless agents will not start the runtime.
-</Warning>
-
-### `permissions`
+Example:
 
 ```yaml
 permissions:
-  tools: [@files, web_fetch, spawn_agent]
-  skills: [pr-reviewer]
+  tools: [@files, read_skill, run_skill, spawn_agent]
+  skills: [docs-auditor]
 ```
 
-| Value | Meaning |
-| --- | --- |
-| omitted | deny all |
-| `null` | deny all |
-| `"*"` | unrestricted |
-| list | only the listed names are available |
+Tool permissions and skill permissions are separate. An agent may be allowed to discover a skill but still lack a tool such as `run_shell`.
 
-Permissions are allow-lists. Unlisted tools and skills are removed from the LLM-visible tool and skill surface.
+### Transport
 
-Tool permissions and skill permissions are independent.
+Current code supports only one runtime transport type:
 
-## `transport`
+```yaml
+transport:
+  type: slack
+```
+
+Slack transport config has two parts:
+
+- `env`: names of environment variables that hold secrets
+- `settings`: non-secret behavior flags
 
 ```yaml
 transport:
@@ -259,49 +262,50 @@ transport:
     expand_mentions: true
 ```
 
-`transport.type` must currently be `slack`.
+Technical details:
 
-| Field | Required | Notes |
-| --- | --- | --- |
-| `type` | yes | Only `slack` is supported |
-| `env.bot_token` | yes | Env var name for the bot token |
-| `env.app_token` | yes | Env var name for the Socket Mode app token |
-| `settings.include_archived_channels` | no | Include archived channels in the refreshed channel snapshot |
-| `settings.inject_channels_into_prompt` | no | Inject the refreshed current channel snapshot into the system prompt |
-| `settings.inject_users_into_prompt` | no | Inject the Slack user list into the system prompt |
-| `settings.expand_mentions` | no | Expand outbound Slack unique `@Name` and `#channel` references into Slack link syntax outside code blocks |
-
-Tokens are resolved from the process environment after `runtime.env_file` is loaded.
-
-When channel injection is enabled, Slack rebuilds that prompt-facing channel snapshot on startup and on channel create, rename, archive, and unarchive events. The goal is to reflect current Slack truth, not keep stale aliases around after renames.
+- config normalization lowercases the transport type
+- missing or extra Slack config keys fail validation
+- agents without a transport are still valid for jobs and `spawn_agent`
+- the runtime process still needs at least one transport somewhere in `agents:` or startup exits
 
 ## `roles`
+
+Roles decide which humans can talk to which agents.
 
 ```yaml
 roles:
   team:
     agents: [operator, researcher]
-  guest:
-    agents: []
 ```
 
-Roles define which agents a user may message.
+Rules:
 
-| Rule | Behavior |
-| --- | --- |
-| `admin` | built-in, grants access to all agents, cannot be redefined |
-| multiple roles | allowed agents are the union of all listed agent names |
-| undefined custom role | grants no agent access |
+- `admin` is built in and cannot be defined in config
+- access is the union of all of a user's roles
+- undefined roles can still be stored on users, but they grant no access until they appear in config
 
-`operator user add` warns when you create a non-admin user with a role name that is not defined in config.
+## Inheritance Rules
 
-## Memory And State
+Use this as the quick reference:
 
-Current Operator has no top-level `memory:` or `state:` config sections.
+| Setting | Chat run | Job run |
+| --- | --- | --- |
+| `models` | agent override or `defaults.models` | `job.model` or resolved agent models |
+| `thinking` | agent override or `defaults.thinking` | resolved agent thinking |
+| `max_iterations` | agent override or `defaults.max_iterations` | `job.max_iterations` or resolved agent value |
+| `context_ratio` | agent override or `defaults.context_ratio` | resolved agent value |
+| `max_output_tokens` | agent override or `defaults.max_output_tokens` | resolved agent value |
 
-- Memory files live under `~/.operator/memory/` and `~/.operator/agents/<agent>/memory/`.
-- The search index lives at `~/.operator/db/memory_index.db`.
-- Optional semantic search is configured with `defaults.embeddings`.
-- Agent state is stored as JSON files under `~/.operator/agents/<agent>/state/`.
+If you need a scheduled task to use a different `thinking`, `context_ratio`, or permission set, point that job at a different agent rather than trying to override the job itself.
 
-See [Memory](/concepts/memory) and [Tools](/concepts/tools) for the runtime behavior of rules, notes, and state files.
+## Practical Example
+
+This is a common pattern:
+
+- one Slack-connected `operator` agent for humans
+- one headless `researcher` agent for deep work
+- humans can talk to both or only to `operator`, depending on role
+- `operator` delegates focused tasks with `spawn_agent(agent="researcher", ...)`
+
+That keeps the chat-facing agent broad and safe while giving the specialist agent a narrower tool set and stronger reasoning model.

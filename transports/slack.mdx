@@ -1,21 +1,18 @@
 ---
 title: "Slack"
-description: "Slack app setup, runtime behavior, stop/cancel control, and transport tools"
+description: "Slack app setup, thread-scoped session behavior, transport tools, and file handling"
 ---
 
 Operator uses Slack Socket Mode. You do not need a public webhook URL.
 
-## Scan First
+## What Slack Currently Means In Operator
 
-- Supported inbound patterns: DMs and `@mentions` in invited channels
-- Supported files: inline images up to 5 MB, all other files saved locally up to 50 MB
-- The runtime uses the authenticated user's stored timezone when rendering live prompt timestamps
-- Slack adds transport tools like `slack_find_users`, `slack_list_channels`, and `slack_read_thread`
-- Exact `stop` and `cancel` messages bypass the LLM and cancel the active request in that conversation
+- Slack is the only runtime transport implemented in current code.
+- DMs and channel mentions are the supported inbound entry points.
+- Sessions are thread-scoped on purpose.
+- Slack adds runtime-only tools for reading channels, threads, users, and reactions.
 
-## Slack App Setup
-
-### 1. Create the app
+## 1. Create The Slack App
 
 Create a Slack app and enable **Socket Mode**.
 
@@ -23,11 +20,11 @@ Create an app-level token with:
 
 - `connections:write`
 
-That becomes your `SLACK_APP_TOKEN`.
+That becomes `SLACK_APP_TOKEN`.
 
-### 2. Add bot scopes
+## 2. Add Bot Scopes
 
-Under **OAuth & Permissions**, add:
+Under **OAuth & Permissions**, add these bot scopes:
 
 - `app_mentions:read`
 - `channels:history`
@@ -43,7 +40,15 @@ Under **OAuth & Permissions**, add:
 - `reactions:write`
 - `users:read`
 
-### 3. Subscribe to events
+Why these exist:
+
+- message ingress needs DM and mention access
+- Slack read tools need channel and thread history
+- outbound messaging and uploads need write scopes
+- reaction tools and reaction system events need reaction access
+- prompt injection and user resolution need `users:read`
+
+## 3. Subscribe To Events
 
 Subscribe to:
 
@@ -52,28 +57,18 @@ Subscribe to:
 - `reaction_added`
 - `reaction_removed`
 
-That covers:
+Slack cache maintenance events such as user changes and channel lifecycle events are handled by the transport and keep the in-memory Slack snapshot fresh.
 
-- DMs
-- channel mentions
-- reaction system events
+## 4. Install The App And Configure Operator
 
-### 4. Install the app
-
-Install the app to your workspace and copy the bot token:
-
-- `SLACK_BOT_TOKEN`
-
-### 5. Configure Operator
-
-Add the tokens to `~/.operator/.env`:
+Put the Slack secrets in `~/.operator/.env`:
 
 ```sh
 SLACK_BOT_TOKEN=xoxb-...
 SLACK_APP_TOKEN=xapp-...
 ```
 
-Then configure the agent transport:
+Configure the agent:
 
 ```yaml
 agents:
@@ -90,109 +85,125 @@ agents:
         expand_mentions: true
 ```
 
-## What The Runtime Handles
+## Session Model
 
-Slack transport accepts:
+Slack conversations are intentionally thread-scoped.
 
-- DMs from human users
-- `@mentions` in channels where the bot is invited
+- a top-level DM starts a new session
+- a top-level channel mention starts a new session thread
+- later replies in that channel thread count as new input only when they mention the agent again
+- unmentioned chatter in the thread is ignored unless the agent deliberately reads it with Slack tools
 
-It ignores:
-
-- bot-authored messages
-- most Slack system and edit subtypes
-
-## Channel, User, and Thread Context
-
-Slack runtime behavior includes:
-
-- treating Slack conversations as thread-scoped sessions
-- resolving user IDs to human names
-- resolving channel IDs to `#channel-name`
-- injecting the current user list and current channel snapshot into the system prompt when enabled
-- exposing message metadata (`message_id`, `channel_id`, and `thread_id`) as a request-only context block
-
-Slack session rules are intentional:
-
-- a top-level DM starts a fresh private session thread
-- a top-level channel `@mention` starts a fresh channel session thread
-- in channels, later replies continue that session only when they mention the agent again
-- unmentioned human replies in the thread are ambient chatter and are ignored unless the agent inspects them with `slack_read_thread(...)`
-
-The injected channel list is refreshed on startup and on Slack channel lifecycle events such as create, rename, archive, and unarchive. Old channel names do not remain as prompt-visible aliases after a refresh.
-
-When the agent is first mentioned inside an existing thread, Operator may inject a one-time snapshot of earlier replies in that thread so the model has context it missed before being added.
-
-Reaction events are buffered as lightweight system events and injected into the next request in the same conversation.
-
-## Stop And Cancel
-
-Slack does not have a general in-chat command surface.
-
-If a message contains only `stop` or `cancel` after trimming whitespace and lowercasing, the runtime handles it directly before prompt assembly or model execution.
-
-- the active request in that conversation is cancelled
-- the control message is not sent to the model
-- any other text, including `please stop`, is treated as a normal user message
-
-If there is no active request in that conversation, Operator replies:
-
-```text
-No active request to stop.
-```
-
-## Conversation Behavior
-
-Slack conversation IDs are built from:
+The conversation ID is built from:
 
 ```text
 slack:<agent-name>:<channel-id>:<root-thread-ts>
 ```
 
-That means the Slack thread root is the conversation boundary. New top-level DMs and new top-level channel mentions start fresh sessions. Replies stay attached to that root thread, but channel replies still need to mention the agent to count as new input.
+That keeps sessions isolated around the Slack thread root.
 
-If a second message arrives while the same conversation is still busy, Operator replies:
+## What The Prompt Gets From Slack
 
-```text
-Still processing a request. Say `stop` to stop it.
-```
+Slack transport can inject:
 
-## Slack Transport Tools
+- the current workspace user list
+- the current visible channel list
+- thread-scoping instructions
+- message metadata such as `message_id`, `channel_id`, and `thread_id`
+
+Prompt injection is configurable:
+
+- `inject_users_into_prompt`
+- `inject_channels_into_prompt`
+- `expand_mentions`
+
+When the agent is first brought into an existing thread, Operator may inject a one-time snapshot of earlier replies so the model can see the thread history it missed before it was mentioned.
+
+Reaction events are buffered and injected into the next request in the same conversation as system-event context.
+
+## Transport Tools
 
 These tools exist only during live Slack-backed runs:
 
 | Tool | Use it for |
 | --- | --- |
-| `slack_find_users(query="", limit=20, linked_only=false)` | find Slack users by display name, handle, Slack ID, email, or linked Operator username; use the returned `<@UID>` mention when names are ambiguous |
-| `slack_list_channels(query="")` | list postable channels, IDs, and current topic or purpose snippets from the refreshed snapshot |
+| `slack_find_users(query="", limit=20, linked_only=false)` | find Slack users by display name, handle, Slack ID, email, or linked Operator username |
+| `slack_list_channels(query="")` | list postable channels from the current Slack snapshot |
 | `slack_read_channel(channel, count=20)` | fetch recent channel messages |
-| `slack_read_thread(channel, thread_id, count=50)` | fetch thread replies |
-| `slack_add_reaction(channel, message_id, emoji)` | add an emoji reaction |
-| `slack_remove_reaction(channel, message_id, emoji)` | remove an emoji reaction |
+| `slack_read_thread(channel, thread_id, count=50)` | fetch replies from a thread |
+| `slack_add_reaction(channel, message_id, emoji)` | add a reaction |
+| `slack_remove_reaction(channel, message_id, emoji)` | remove a reaction |
 
-`send_message` also accepts Slack channel names like `#general` or raw channel IDs.
-Raw `@Name` only auto-expands when the display name is unique. When multiple Slack users share a display name, use the explicit `<@UID>` mention returned by `slack_find_users(...)`.
+The built-in `send_message` tool also works with Slack channel names such as `#general` or raw channel IDs.
+
+Mention guidance:
+
+- use `@Name` only when the display name is unambiguous
+- when in doubt, call `slack_find_users` and use the returned explicit `<@UID>` mention
+
+## Stop And Cancel
+
+If a message is exactly `stop` or `cancel` after trimming whitespace and lowercasing, the runtime handles it directly.
+
+That message:
+
+- does not go to the model
+- cancels the active request for that conversation if one exists
+
+If the conversation is idle, Operator replies:
+
+```text
+No active request to stop.
+```
+
+If a second request arrives while the same conversation is still busy, Operator replies:
+
+```text
+Still processing a request. Say `stop` to stop it.
+```
 
 ## File Handling
 
-Inbound Slack files behave like this:
+Inbound Slack files are downloaded into the active agent workspace under `workspace/inbox/`.
 
-| File type | Runtime behavior |
+Behavior by file type:
+
+| File type | Behavior |
 | --- | --- |
-| image/png, image/jpeg, image/gif, image/webp up to 5 MB | inlined into the model request as an image block and saved under `workspace/inbox/` |
-| other file types up to 50 MB | saved under `workspace/inbox/` and described in text |
+| images up to 5 MB (`png`, `jpeg`, `gif`, `webp`) | saved to `inbox/` and also inlined to the model as image content |
+| other files up to 50 MB | saved to `inbox/` and described in text |
 | larger than 50 MB | skipped |
 
 Additional details:
 
-- duplicate filenames get suffixed (`file_1.txt`, etc.)
-- unsafe filenames are sanitized to a basename
-- saved files can be read later with workspace tools
+- duplicate filenames get suffixed
+- downloads larger than 50 MB are rejected
+- outbound uploads use Slack `files.upload_v2`
 
-Outbound uploads use `send_file`, which calls Slack `files.upload_v2`.
+## Channel Snapshot Behavior
 
-## Related Docs
+Operator refreshes the channel snapshot:
 
-- [Quickstart](/quickstart)
-- [Built-in Tools](/concepts/tools)
-- [Agents](/concepts/agents)
+- on startup
+- after channel create
+- after channel rename
+- after archive and unarchive events
+
+The goal is current platform truth, not stale aliases. If a channel is renamed, the injected list is refreshed so the old name does not linger in the prompt.
+
+## Common Debugging Checks
+
+Start here when Slack does not behave the way you expect:
+
+```sh
+operator logs -n 100
+operator config
+operator agents
+```
+
+Then verify:
+
+- the Slack app is installed to the workspace
+- the bot is invited to the channel
+- your Slack user is linked with `operator user add` or `operator user link`
+- the agent transport points at the right env vars

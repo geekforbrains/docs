@@ -1,165 +1,158 @@
 ---
 title: "Built-in Tools"
-description: "The tool surface Operator agents can use at runtime"
+description: "What tools Operator agents can use and how permissions affect them"
 ---
 
 Operator registers a built-in tool set and may add transport-specific tools at runtime.
 
-## Scan First
+## How Tool Availability Works
 
-- Permissions can hide tools from specific agents.
-- Some tools require runtime context to work correctly.
-- Transport tools only appear for the active transport.
-- `run_shell` is powerful. Remove it with permissions if an agent should not have shell access.
-- `operator tools` lists built-in tools only, not transport tools.
+Three gates control whether an agent can actually use a tool:
 
-## Tool Availability Rules
+1. the tool must be registered
+2. the agent must be allowed to use it through `permissions.tools`
+3. the current run must provide any required context such as a transport, memory store, or authenticated user
 
-There are three separate gates:
+Example:
 
-1. **Registration:** built-in tools are registered globally
-2. **Permissions:** `permissions.tools` and `permissions.skills` may hide them from an agent
-3. **Runtime context:** some tools still need a transport, memory store, or authenticated user context
+- `send_message` is always registered
+- it still fails if the current run has no transport
 
-Example: `send_message` is registered, but it returns an error if the current run does not have a transport.
+`operator tools` lists only built-in tools. Transport tools such as Slack tools are added at runtime and do not appear in that CLI output.
 
-## Shell, Files, and Web
+## Files, Shell, And Web
 
-| Tool | Notes |
+| Tool | Purpose |
 | --- | --- |
-| `run_shell(command, timeout=120)` | runs `bash -c` from the agent workspace |
-| `read_file(path)` | reads a file, capped at 1 MB / 16 KB returned output |
-| `write_file(path, content)` | writes a file, creating parent directories |
-| `list_files(path=".", max_depth=2)` | lists non-hidden files and directories |
-| `web_fetch(url, offset=0, limit=16000)` | fetches text-friendly web content |
+| `read_file(path)` | read a file |
+| `write_file(path, content)` | write a file |
+| `list_files(path=".", max_depth=2)` | list files and directories |
+| `run_shell(command, timeout=120)` | run `bash -c` in the agent workspace |
+| `web_fetch(url, offset=0, limit=16000)` | fetch URL content as clean text |
 
-Important behavior:
+Technical details:
 
-- file paths resolve relative to the agent workspace by default
-- absolute paths are still allowed
-- `send_file` uses the same path resolution as file tools
-- `run_shell` and `run_skill` run with the workspace as `cwd`
+- relative file paths resolve from the agent workspace
+- absolute paths are allowed
+- `read_file` reads up to 1 MB and truncates returned text to 16 KB
+- `list_files` skips hidden files and directories
+- `web_fetch` prefers `.md` variants when available and notes `llms.txt` support when detected
 
 ## Messaging
 
-| Tool | Notes |
+| Tool | Purpose |
 | --- | --- |
-| `send_message(channel="", text="", thread_id="")` | sends a message and returns the platform message ID |
-| `send_file(path, channel="", thread_id="")` | uploads a file and returns the platform message ID when supported |
+| `send_message(channel="", text="", thread_id="")` | post a message and return a platform message ID |
+| `send_file(path, channel="", thread_id="")` | upload a file and return a platform message ID |
 
 Defaults:
 
-- if `channel` is omitted, use the current conversation channel
-- if `thread_id` is omitted, use the current conversation thread
+- omitted `channel` means the current conversation channel
+- omitted `thread_id` means the current conversation thread
 
 `send_file` rejects files over 50 MB.
 
-For Slack-backed runs, that default thread is the current Slack session thread. If the agent needs context from outside the addressed messages in that session, it should use Slack read tools explicitly.
-
-## Sub-Agents
-
-| Tool | Notes |
-| --- | --- |
-| `spawn_agent(task, context="", agent="")` | creates a fresh isolated child run and returns its final answer |
-
-Rules:
-
-- max depth is `3`
-- without `agent=`, the child starts a fresh isolated run of the current agent
-- with `agent=`, the child starts a fresh isolated run of that target agent with its own prompt, memory, state, skills, workspace, and permissions
-- only the delegated `task` and optional `context` become new child input; parent conversation history is not inherited automatically
-- delegation preserves the current run mode: chat children keep the current session/channel/thread bindings, while job children stay in job mode
-- preserved session or job context is runtime envelope only, not inherited capability permission
-
 ## Memory
 
-| Tool | Notes |
+| Tool | Purpose |
 | --- | --- |
-| `save_rule(key, content, scope="agent")` | store standing guidance |
-| `save_note(key, content, scope="agent", ttl="")` | store searchable durable or time-limited knowledge |
-| `search_notes(query, scope="agent")` | search note memories |
-| `list_rules(scope="agent")` | list active rules |
-| `list_notes(scope="agent", limit=50, offset=0)` | list active notes |
-| `read_note(key, scope="agent")` | read one note in full |
-| `forget_rule(key, scope="agent")` | move a rule to trash |
-| `forget_note(key, scope="agent")` | move a note to trash |
+| `save_rule` | create or replace a rule |
+| `save_note` | create or replace a note |
+| `search_notes` | search notes |
+| `list_rules` | list rules |
+| `list_notes` | list notes with pagination |
+| `read_note` | read one note |
+| `forget_rule` | move a rule to trash |
+| `forget_note` | move a note to trash |
 
-Memory rules:
+Memory tools use logical scopes:
 
-- `user` scope only works in private conversations
-- jobs only use `agent` and `global` memory
-- search reads from the SQLite memory index, which is rebuilt from files
+- `agent`
+- `user`
+- `global`
+
+`user` scope is available only in private user conversations.
 
 ## State
 
-| Tool | Notes |
+| Tool | Purpose |
 | --- | --- |
-| `get_state(key)` | read JSON state by key |
-| `set_state(key, value)` | write a scalar state value |
-| `append_state(key, value, max_items=0)` | append to a list state key |
-| `pop_state(key)` | remove and return the oldest item from a list |
-| `list_state()` | list all state keys for the current agent |
+| `get_state(key)` | read JSON state |
+| `set_state(key, value)` | write scalar state |
+| `append_state(key, value, max_items=0)` | append to list state |
+| `pop_state(key)` | remove and return the oldest list item |
+| `list_state()` | list all state keys |
 | `delete_state(key)` | delete a state key |
 
-State lives in JSON files under the active Operator home, usually `~/.operator/agents/<agent>/state/`.
+State is file-backed JSON under `agents/<agent>/state/`.
 
-Use state for operational data like:
+Use state for machine bookkeeping such as:
 
 - cursors
-- checkpoints
 - dedupe keys
 - rolling queues
+- checkpoints
 
-## Jobs and Skills
+## Jobs And Skills
 
-| Tool | Notes |
+| Tool | Purpose |
 | --- | --- |
-| `create_job` / `update_job` / `delete_job` | manage `jobs/<name>/JOB.md` |
-| `enable_job` / `disable_job` / `list_jobs` | control job state |
-| `create_skill` / `update_skill` / `delete_skill` / `list_skills` | manage `skills/<name>/SKILL.md` |
-| `read_skill(skill, path="")` | read `SKILL.md`, references, or assets |
-| `run_skill(skill, command, timeout=120)` | execute a skill-related command |
+| `create_job`, `update_job`, `delete_job` | manage job definitions |
+| `enable_job`, `disable_job`, `list_jobs` | control job state |
+| `create_skill`, `update_skill`, `delete_skill`, `list_skills` | manage skills |
+| `read_skill` | read skill content or a specific file in the skill |
+| `run_skill` | run a command in skill context |
 
-Key behavior:
+The job and skill management tools exist so agents do not have to compose raw markdown frontmatter safely by hand.
 
-- job and skill management tools take structured arguments, not raw markdown blobs
-- `create_job` and `update_job` can scaffold placeholder hook scripts
-- `run_skill` uses `shell=False`, strips transport secrets, preserves `$OPERATOR_HOME`, and sets `SKILL_DIR`
+## Users
 
-## User Management
-
-| Tool | Notes |
+| Tool | Purpose |
 | --- | --- |
-| `manage_users(action, username="", role="", transport="", external_id="")` | runtime user and role management |
+| `manage_users(action, ...)` | list, add, remove, link, unlink, add_role, and remove_role |
 | `set_timezone(timezone)` | set the current user's timezone |
 
-`manage_users` is role-gated:
+Important detail:
 
-- requires the `admin` role
-- stays visible to the LLM
-- returns an error if the active user is not an admin
+- `manage_users` is not separately admin-gated inside the tool implementation
+- access control comes from whether the agent itself is allowed to use `manage_users`
 
-## Transport Tools
+Only give it to trusted agents.
 
-Transport tools are added at runtime. They do not appear in `operator tools`, which only lists built-in tools.
+## Delegation
 
-Slack currently adds:
-
-| Tool | Notes |
+| Tool | Purpose |
 | --- | --- |
-| `slack_find_users(query="", limit=20, linked_only=false)` | find Slack users by display name, handle, Slack ID, email, or linked Operator username; use the returned `<@UID>` mention when names are ambiguous |
-| `slack_list_channels(query="")` | show current postable channels from Slack's refreshed snapshot |
-| `slack_read_channel(channel, count=20)` | fetch recent channel messages |
-| `slack_read_thread(channel, thread_id, count=50)` | fetch thread replies |
-| `slack_add_reaction(channel, message_id, emoji)` | add an emoji reaction |
-| `slack_remove_reaction(channel, message_id, emoji)` | remove an emoji reaction |
+| `spawn_agent(task, context="", agent="")` | run a focused child task in a fresh agent session |
 
-See [Slack](/transports/slack) for the Slack-specific runtime behavior.
+Behavior:
 
-## Choosing The Right Tool
+- omitting `agent` spawns a fresh run of the current agent
+- specifying `agent` switches to that target agent's own prompt, memory, workspace, tools, skills, and permissions
+- current user access restrictions still apply
+- max delegation depth is `3`
 
-- use **state** for operational counters, cursors, and queues
-- use **memory** for reusable human or project facts
-- use **jobs** for recurring autonomous workflows
-- use **skills** for reusable instructions and scripts
-- use **sub-agents** when a task benefits from isolation or a different agent persona
+## Slack Runtime Tools
+
+During Slack-backed runs, Operator adds:
+
+- `slack_find_users`
+- `slack_list_channels`
+- `slack_read_channel`
+- `slack_read_thread`
+- `slack_add_reaction`
+- `slack_remove_reaction`
+
+These are transport tools, not built-ins. They exist only when the current run is using the Slack transport.
+
+## Choosing The Right Primitive
+
+Use:
+
+- tools when the agent needs to do work now
+- skills when the agent needs reusable instructions
+- memory when the agent should remember durable knowledge
+- state when the runtime needs machine-readable bookkeeping
+- jobs when the work should happen on a schedule
+
+Keeping those separate is one of the main reasons Operator stays understandable as a system instead of collapsing everything into hidden prompt state.

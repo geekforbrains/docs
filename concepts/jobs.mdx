@@ -1,19 +1,26 @@
 ---
 title: "Jobs"
-description: "Scheduled markdown-defined tasks with cron, hooks, and runtime state"
+description: "Scheduled markdown-defined tasks with cron, hooks, runtime state, and queueing"
 ---
 
-Jobs are stored in `~/.operator/jobs/<name>/JOB.md`.
+Jobs are for recurring work that should happen without waiting for a human to ask.
 
-## Scan First
+Each job lives at `~/.operator/jobs/<name>/JOB.md`. The file is the source of truth, and the scheduler reads it directly.
 
-- Cron schedules are evaluated against the current UTC minute.
-- Job prompts are markdown bodies under YAML frontmatter.
-- The job body becomes a stamped `user` message when the run starts.
-- `prerun` can gate a job by returning non-zero.
-- `postrun` receives the final model output on stdin.
-- Scheduled jobs only get transport messaging if the target agent has a runtime transport.
-- `operator job run` always uses a CLI transport and prints `send_message` output locally.
+## When To Use A Job
+
+Use a job when the work is:
+
+- recurring
+- asynchronous
+- better expressed as a prompt plus a little deterministic glue
+
+Examples:
+
+- daily summaries
+- release reminders
+- recurring status reports
+- periodic cleanup or sync tasks
 
 ## Job File Format
 
@@ -35,7 +42,9 @@ Summarize the key events from the last 24 hours.
 Post a short teaser to #general, then reply in a thread with the full summary.
 ```
 
-The body is the `user` prompt for the job run. Because jobs do not run as an authenticated user, the rendered timestamp on that message uses UTC.
+The markdown body becomes the job's `user` message.
+
+Best practice: keep the directory name and frontmatter `name` aligned even though the runtime can still find a mismatched frontmatter name by scanning.
 
 ## Scheduler Behavior
 
@@ -43,57 +52,51 @@ The background runtime:
 
 - scans `jobs/*/JOB.md`
 - checks cron matches once per minute
+- evaluates cron schedules against the current UTC time
 - skips disabled jobs
-- increments `skip_count` when a previous run of the same job is still active
-- serializes jobs per agent, queueing multiple due jobs that target the same agent
+- serializes jobs per target agent through FIFO queues
+- allows different agents to run jobs concurrently
 
-## Agent Selection
+Two runtime counters matter:
 
-The execution agent is:
+- `skip_count` increments when the same job is due again while its previous run is still active
+- queued jobs for the same agent still run in order once the agent worker is free
 
-1. `job.agent`, if present
+## Which Agent Runs The Job
+
+Agent resolution is:
+
+1. `job.agent`, if set
 2. otherwise the default agent from config
 
-That chosen agent supplies:
+That agent supplies:
 
-- the prompt body from `AGENT.md`
+- `AGENT.md`
 - permissions
-- available skills
+- skill access
 - workspace
+- memory scope
 - `thinking`
 - `context_ratio`
 - `max_output_tokens`
-- the default `models` fallback chain when `job.model` is unset
+- default model chain when `job.model` is unset
 
-## What Jobs May Override
+## What A Job Can Override
 
-Job frontmatter supports two execution overrides:
+Jobs can override only two execution settings:
 
 | Field | Meaning |
 | --- | --- |
-| `model` | replaces the agent model chain with a single model |
-| `max_iterations` | overrides the agent/default iteration cap |
+| `model` | replace the resolved agent model chain with a single model |
+| `max_iterations` | override the resolved iteration cap |
 
-Jobs do **not** support per-job `thinking`, `context_ratio`, or `max_output_tokens`.
+Jobs do not support per-job overrides for:
 
-## Messaging Behavior
+- `thinking`
+- `context_ratio`
+- `max_output_tokens`
 
-Scheduled jobs use the selected agent's configured transport when one exists.
-
-That means:
-
-- jobs targeting a Slack-connected agent can call `send_message` or `send_file`
-- jobs targeting a headless agent still run, but transport tools will error during scheduled execution
-
-`operator job run <name>` is different:
-
-- it does **not** post to Slack
-- it injects a CLI transport
-- `send_message` output is printed in your terminal
-
-<Note>
-  `operator job run` ignores the cron schedule and runs the job immediately, even if the job is disabled.
-</Note>
+If you need those to differ, point the job at a different agent.
 
 ## Hooks
 
@@ -103,53 +106,91 @@ hooks:
   postrun: scripts/publish.sh
 ```
 
+Hook behavior:
+
 | Hook | Behavior |
 | --- | --- |
-| `prerun` | runs before the LLM call; non-zero exit marks the run as `gated` and skips the model |
+| `prerun` | runs before the model; non-zero exit gates the job and skips model execution |
 | `postrun` | runs after the final model output; receives that output on stdin |
 
-Hook paths must be **relative** and must remain inside the job directory. Absolute paths and `..` escapes are rejected.
+`prerun` stdout is injected into the prompt as:
 
-Job hooks receive:
+```text
+<prerun_output>
+...
+</prerun_output>
+```
+
+This is the main reason jobs are practical. Deterministic work stays in scripts. The model works on already-fetched or already-filtered data.
+
+Technical constraints:
+
+- hook paths must be relative
+- hook paths must stay inside the job directory
+- absolute paths and `..` escapes are rejected
+- the working directory is the job directory
+- timeout comes from `defaults.hook_timeout`
+
+Environment variables available to hooks:
 
 | Variable | Value |
 | --- | --- |
 | `JOB_NAME` | current job name |
 | `JOB_DIR` | absolute path to the job directory |
 | `OPERATOR_AGENT` | agent running the job |
-| `OPERATOR_HOME` | Active Operator base directory for the loaded config |
-| `OPERATOR_DB` | path to the active `operator.db` for the loaded config |
+| `OPERATOR_HOME` | active Operator base directory |
+| `OPERATOR_DB` | path to the active `operator.db` |
 
-The hook working directory is the job directory. Hook timeout comes from `defaults.hook_timeout` and defaults to `30` seconds.
+## Transport Behavior
+
+Scheduled jobs use the selected agent's configured transport when one exists.
+
+That means:
+
+- a Slack-connected agent can post with `send_message` or `send_file`
+- a headless agent still runs the job, but transport-dependent tools return errors
+
+`operator job run <name>` behaves differently:
+
+- it ignores the cron schedule
+- it runs even if the job is disabled
+- it uses the CLI transport instead of Slack
+
+So if the job calls `send_message`, you see the output in the terminal instead of in Slack.
 
 ## Memory In Jobs
 
 Jobs do not use user-scoped memory.
 
-Job recall and rule injection only use:
+Available memory scopes during job execution:
 
-- `agent/<agent-name>`
+- `agent`
 - `global`
 
-This keeps scheduled work from depending on a specific human user's private context.
+That keeps scheduled work from depending on one user's private conversation context.
 
 ## Runtime State
 
-Each job has persisted runtime counters:
+Each job stores persistent runtime counters in SQLite:
 
 | Field | Meaning |
 | --- | --- |
-| `last_run` | ISO timestamp of the last attempt |
+| `last_run` | timestamp of the last attempt |
 | `last_result` | `success`, `error`, or `gated` |
 | `last_duration_seconds` | rounded duration |
 | `last_error` | error string for the last failed run |
-| `run_count` | number of runs that reached model execution |
-| `error_count` | number of failed runs after execution started |
-| `gate_count` | number of prerun-gated runs |
-| `skip_count` | number of scheduler skips because a prior run was still active |
+| `run_count` | runs that reached execution |
+| `error_count` | failed runs |
+| `gate_count` | prerun-gated runs |
+| `skip_count` | scheduler skips because a previous run of the same job was still active |
 
-## Managing Jobs
+Use `operator job list` and `operator job info <name>` to inspect this state quickly.
 
-- create or edit files manually in `~/.operator/jobs/`
-- use the deterministic runtime tools `create_job`, `update_job`, `delete_job`, `enable_job`, `disable_job`, and `list_jobs`
-- use the [Jobs CLI](/cli/jobs) to inspect, enable, disable, and manually run jobs
+## Creating And Updating Jobs
+
+You have two supported paths:
+
+1. edit files directly under `~/.operator/jobs/`
+2. use the deterministic tools `create_job`, `update_job`, `delete_job`, `enable_job`, `disable_job`, and `list_jobs`
+
+The job tools are safer for agent-authored changes because they take structured fields instead of raw YAML and can scaffold placeholder hook scripts automatically.

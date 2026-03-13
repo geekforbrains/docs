@@ -1,83 +1,74 @@
 ---
 title: "Quickstart"
-description: "Install Operator, connect Slack, and send your first message"
+description: "Install Operator, connect Slack, create the first admin, and send the first message"
 ---
 
+This is the shortest path to a working Operator install. Keep the starter setup simple, prove the runtime works, then tighten permissions and add more agents.
+
 ## Fast Path
+
+1. Install the package and scaffold `~/.operator/`.
+2. Add a model API key and Slack tokens to `.env`.
+3. Create your first admin user.
+4. Start the runtime.
+5. DM the bot or mention it in Slack.
+
+## 1. Install And Scaffold
 
 ```sh
 pip install operator-ai
 operator init
 ```
 
-That path:
-
-- scaffolds the full `~/.operator/` layout
-- writes a Slack-focused starter `operator.yaml`
-- writes `.env`, `SYSTEM.md`, and `agents/operator/AGENT.md`
-- preserves existing `.env` and `AGENT.md` files
-- prompts before overwriting an existing `operator.yaml`
-
-If the `operator` script is not on your `PATH` yet, use:
+If the `operator` script is not on your `PATH` yet:
 
 ```sh
 python3 -m operator_ai init
 ```
 
-## Requirements
+`operator init` creates the default home under `~/.operator/` and writes:
 
-- Python `3.11+`
-- A Slack app using Socket Mode
-- One model provider API key:
-  - `ANTHROPIC_API_KEY`
-  - `OPENAI_API_KEY`
-  - `GEMINI_API_KEY` or `GOOGLE_API_KEY`
-- Slack bot and app tokens
-- Your Slack user ID for the first admin user
+- `operator.yaml`
+- `.env`
+- `SYSTEM.md`
+- `agents/operator/AGENT.md`
+- the default jobs, skills, shared, db, logs, workspace, memory, and state directories
 
-## What `operator init` Writes
+It also writes starter `permission_groups` and a single Slack-connected `operator` agent with full tool and skill access so you can get a first run working quickly.
 
-After `operator init`, you will have:
+If `operator.yaml` already exists, the command prompts before overwriting it. `operator init --force` overwrites `operator.yaml` without prompting, but keeps existing `.env` and `AGENT.md` files.
 
-- `~/.operator/operator.yaml`
-- `~/.operator/.env`
-- `~/.operator/SYSTEM.md`
-- `~/.operator/agents/operator/AGENT.md`
-- `~/.operator/agents/operator/workspace/{inbox,work,artifacts,tmp}`
-- `~/.operator/agents/operator/memory/{rules,notes,trash}`
-- `~/.operator/agents/operator/state/`
-- `~/.operator/shared/`
-- `~/.operator/jobs/`
-- `~/.operator/skills/`
-- `~/.operator/memory/global/`
-- `~/.operator/memory/users/`
-- `~/.operator/db/`
-- `~/.operator/logs/`
+## 2. Create The Slack App
 
-If `operator.yaml` already exists, `operator init` asks before replacing it. Use `--force` to overwrite it without a prompt.
+Operator currently supports Slack as its runtime transport.
 
-<Note>
-  The `.env` loader uses `setdefault` semantics. Existing shell environment variables win over values from `runtime.env_file`.
-</Note>
+Create a Slack app, enable Socket Mode, add the required bot scopes, subscribe to the required events, and install the app to your workspace. The full setup is on the [Slack guide](/transports/slack). The short version is:
 
-## Edit `operator.yaml`
+- create an app-level token with `connections:write`
+- create a bot token
+- subscribe to `app_mention`, `message.im`, `reaction_added`, and `reaction_removed`
 
-The starter config is Slack-only and gives the default `operator` agent full tool and skill access:
+## 3. Add Secrets
+
+Put the secrets in `~/.operator/.env`:
+
+```sh
+ANTHROPIC_API_KEY=sk-ant-...
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_APP_TOKEN=xapp-...
+```
+
+Use the provider key that matches your configured model IDs. The generated config defaults to:
 
 ```yaml
-runtime:
-  env_file: ".env"
-  show_usage: false
-  reject_response: ignore
-
 defaults:
   models:
     - "anthropic/claude-sonnet-4-6"
-  thinking: "off"
-  max_iterations: 25
-  context_ratio: 0.5
-  hook_timeout: 30
+```
 
+The default config also wires the starter agent to Slack:
+
+```yaml
 agents:
   operator:
     permissions:
@@ -93,64 +84,61 @@ agents:
         inject_channels_into_prompt: true
         inject_users_into_prompt: true
         expand_mentions: true
-
-roles:
-  guest:
-    agents: []
 ```
 
-`operator init` also writes starter `permission_groups` for common tool clusters like files, web, jobs, skills, memory, users, and sub-agents.
+<Note>
+  `runtime.env_file` is loaded with `setdefault` semantics. Values already present in your shell environment win over values from `.env`.
+</Note>
 
-## Add Secrets
+## 4. Create The First Admin User
 
-Add the required keys to `~/.operator/.env`:
+Operator does not auto-create users. Until you add one, inbound Slack messages are rejected.
 
-```sh
-ANTHROPIC_API_KEY=sk-ant-...
-SLACK_BOT_TOKEN=xoxb-...
-SLACK_APP_TOKEN=xapp-...
-```
-
-## Create The First Admin
-
-Register yourself as the first admin:
+Create yourself as the first admin:
 
 ```sh
 operator user add yourname --role admin slack YOUR_SLACK_USER_ID
 ```
 
-`operator init` does not create users for you. Until you add at least one user, inbound Slack messages will be rejected.
+That command creates the user record, assigns the `admin` role, and links the Slack identity in one step.
 
-## Start The Runtime
+## 5. Start The Runtime
 
-Then start the runtime:
+Foreground:
 
 ```sh
 operator
 ```
 
-Or run it in the background:
+Background service:
 
 ```sh
 operator service install
 operator service start
 ```
 
-On macOS, `service install` loads the service immediately. On Linux, it only enables the unit, so `operator service start` is still required.
+Platform detail:
 
-## First Slack Message
+- macOS: `service install` writes the plist and loads it immediately.
+- Linux: `service install` writes the user unit and enables it, but you still need `operator service start`.
+
+## 6. Send The First Message
 
 Once the runtime is running:
 
-1. Invite the Slack app to a channel if you want channel access.
-2. DM the bot, or `@mention` it in an invited channel.
-3. Send a simple first message like `hello`.
+1. invite the Slack app to a channel if you want channel access
+2. DM the bot or `@mention` it in an invited channel
+3. send a simple message such as `hello`
 
-If your Slack user is not registered, Operator rejects the message according to `runtime.reject_response`.
+Slack sessions are intentionally thread-scoped:
 
-Slack sessions are thread-scoped on purpose. A top-level DM or top-level channel `@mention` starts a fresh session thread. In channels, mention the agent again in later thread replies if you want those replies treated as new input.
+- a top-level DM starts a new session
+- a top-level channel mention starts a new session thread
+- later channel replies count as new input only when they mention the agent again
 
-## Sanity Checks
+If the agent needs context outside that thread, it uses Slack tools such as `slack_read_channel` or `slack_read_thread`.
+
+## 7. Run The Basic Checks
 
 ```sh
 operator config
@@ -159,21 +147,19 @@ operator tools
 operator logs -n 50
 ```
 
-These confirm that config loads, agents are visible, built-in tools are registered, and the runtime has started logging.
+These confirm that:
 
-## Next Steps
+- config parses
+- the configured agents are visible
+- built-in tools are registered
+- the runtime is logging normally
 
-<CardGroup cols={2}>
-  <Card title="Slack Setup" icon="message" href="/transports/slack">
-    Create the Slack app, add scopes, and verify events.
-  </Card>
-  <Card title="Configuration" icon="gear" href="/configuration">
-    Full `operator.yaml` reference with defaults and runtime behavior.
-  </Card>
-  <Card title="Agents" icon="robot" href="/concepts/agents">
-    Understand prompts, workspaces, permissions, and sub-agents.
-  </Card>
-  <Card title="CLI Overview" icon="terminal" href="/cli/overview">
-    Manage users, jobs, skills, memory, services, logs, and state.
-  </Card>
-</CardGroup>
+## What To Change Next
+
+Use these in order:
+
+- [Configuration](/configuration) for models, roles, permissions, and more agents
+- [Agents](/concepts/agents) for prompt design, workspaces, and delegation
+- [Jobs](/concepts/jobs) for recurring work
+- [Skills](/concepts/skills) for reusable know-how
+- [Memory](/concepts/memory) for durable knowledge

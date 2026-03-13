@@ -1,18 +1,9 @@
 ---
 title: "Users & Auth"
-description: "How Operator authenticates people and maps them to allowed agents"
+description: "How Operator authenticates people, assigns roles, and scopes access"
 ---
 
-Every inbound transport message is authenticated. There is no “disable auth” mode in the runtime.
-
-## Scan First
-
-- Unknown users are rejected.
-- `admin` is built in and grants access to every agent.
-- Custom roles map to explicit agent lists.
-- Allowed agents are the union of the user's roles.
-- `runtime.reject_response` decides whether rejections are silent or announced.
-- User timezone is stored on the user record, not in `operator.yaml`.
+Every inbound message is authenticated against a stored user identity. There is no anonymous mode in the runtime.
 
 ## Identity Model
 
@@ -25,12 +16,13 @@ Transport identities are stored as `transport:external_id`, for example:
 
 ```text
 slack:U04ABC123
-telegram:12345678
 ```
 
-The current runtime transport is Slack, but the user database can store arbitrary transport prefixes.
+The current runtime transport is Slack, but the database format is transport-agnostic.
 
 ## Roles
+
+Roles map users to allowed agents.
 
 ```yaml
 roles:
@@ -42,23 +34,21 @@ roles:
 
 Rules:
 
-- `admin` is built in and cannot be declared in `operator.yaml`
-- multiple roles are allowed
-- allowed agents are the union of the listed agent names
-- undefined custom roles are stored but grant no access until they are defined in config
-
-`operator user add` warns when you assign a non-admin role that is not currently defined in config.
+- `admin` is built in and cannot be defined in config
+- a user's access is the union of all of their roles
+- undefined custom roles can still be stored, but they grant no access until they are defined in config
 
 ## Runtime Auth Flow
 
-On each incoming Slack message:
+On each incoming Slack message, Operator:
 
-1. resolve `slack:<user_id>` to a username
-2. load that user's roles
-3. resolve roles to the set of allowed agents
-4. reject the message if the target agent is not allowed
+1. resolves the transport identity such as `slack:U04ABC123`
+2. maps it to a username
+3. loads that user's roles
+4. resolves the allowed agents from config
+5. rejects the message if the target agent is not allowed
 
-If the user has `admin`, access is unrestricted.
+If the user has the `admin` role, they can access every configured agent.
 
 ## Rejection Behavior
 
@@ -67,26 +57,24 @@ runtime:
   reject_response: ignore
 ```
 
-| Value | Runtime behavior |
+| Value | Behavior |
 | --- | --- |
 | `ignore` | silently drop the message |
 | `announce` | reply with `You don't have access to this agent.` |
 
-If there are no users in the database at all, the runtime still rejects inbound messages. `operator init` does not create users for you. Bootstrap the first admin explicitly:
-
-```sh
-operator user add gavin --role admin slack U04ABC123
-```
+If there are no users in the database, the runtime still starts, but inbound messages are rejected until you add at least one user.
 
 ## Timezone
 
-User timezone is part of the stored user profile.
+Timezone is stored on the user record, not in `operator.yaml`.
 
-- it appears in the runtime prompt context
-- live `user` message timestamps render in that timezone when present
-- jobs do not use it because they run without a user context
+Why that matters:
 
-Users can store their own timezone in chat with:
+- live user messages are timestamped in the user's timezone when available
+- the timezone appears in the prompt context
+- jobs do not use user timezone because jobs run without a user context
+
+Users can set their own timezone during chat:
 
 ```text
 set_timezone("America/Vancouver")
@@ -94,43 +82,55 @@ set_timezone("America/Vancouver")
 
 ## CLI Management
 
+Common commands:
+
 ```sh
 operator user add gavin --role admin slack U04ABC123
-operator user link gavin slack U07XYZ999
+operator user link gavin slack U08ALT111
 operator user add-role gavin team
 operator user list
 operator user info gavin
 ```
 
-Important distinctions:
+Key distinctions:
 
-- `operator user add` creates the user, assigns a role, and links the identity in one command
-- `operator user link` adds another transport identity to an existing user
-- `operator user remove` deletes the user, roles, and identities together
+- `operator user add` creates the user, assigns a role, and links an identity
+- `operator user link` adds another identity to an existing user
+- `operator user remove` deletes the user plus linked roles and identities
+- `operator user unlink` removes one `transport:external_id` mapping
 
-See [Users CLI](/cli/users) for full command behavior.
+Current implementation detail:
 
-## `manage_users` Tool
+- `user unlink` requires a positional username for command shape, but the unlink operation removes the exact identity mapping without verifying that it belongs to that username first
 
-The built-in `manage_users` tool is runtime-only and **admin-gated**.
+## `manage_users`
 
-Its `add` action creates a user and assigns a role, but it does **not** link a transport identity. Linking is a separate action:
+`manage_users` is the runtime tool version of user management.
 
-```text
-manage_users(action="add", username="alex", role="team")
-manage_users(action="link", username="alex", transport="slack", external_id="U123ABC45")
-```
+Actions:
 
-Non-admin users can still see the tool in the model surface, but execution is blocked with an error.
+- `list`
+- `add`
+- `remove`
+- `link`
+- `unlink`
+- `add_role`
+- `remove_role`
+
+Current behavior worth knowing:
+
+- the `add` action creates a user and assigns a role, but does not link a transport identity
+- linking is a separate action
+- `unlink` removes the exact `transport:external_id` mapping
+
+This is another reason to grant `manage_users` only to trusted agents.
 
 ## Memory Scope Interaction
 
-In private conversations, live chat memory uses the authenticated user context for `user`-scoped memory. In public channels, `user` scope is unavailable and only `agent` plus `global` memory is considered.
+User-scoped memory depends on the authenticated user context.
 
-Scheduled jobs do not use user-scoped memory at all.
+- private chats can use `user` memory scope
+- public channels cannot
+- jobs never use `user` scope
 
-## Related Docs
-
-- [Configuration](/configuration)
-- [Built-in Tools](/concepts/tools)
-- [Slack](/transports/slack)
+That keeps private user memory from leaking into public or scheduled contexts.

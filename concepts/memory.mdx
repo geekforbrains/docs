@@ -1,18 +1,20 @@
 ---
 title: "Memory"
-description: "File-backed rules, notes, search, expiry, and debugging"
+description: "File-backed rules, searchable notes, scope rules, expiry, and indexing"
 ---
 
-Operator memory is file-backed. Markdown files are the source of truth, and SQLite is used only for search indexing.
+Operator memory is file-backed. Markdown files are the source of truth, and SQLite is used only for search and indexing.
 
-## Scan First
+## The Core Split
 
-- Memory lives in files under `~/.operator/memory/` and `~/.operator/agents/<name>/memory/`.
-- Rules are always injected into the system prompt.
-- Notes are searched on demand.
-- `user` scope is available only in private chat contexts.
-- Jobs use `agent` and `global` memory only.
-- Expired notes and forgotten items move to `trash/` instead of being hard-deleted.
+Memory has two behaviors:
+
+| Kind | Behavior | Best for |
+| --- | --- | --- |
+| `rules/` | always injected into the prompt | short standing guidance |
+| `notes/` | searched on demand | facts, references, and durable context |
+
+That split is deliberate. Rules should stay small and high-signal. Notes can be broader because they are not injected every turn.
 
 ## Directory Layout
 
@@ -42,94 +44,103 @@ Each memory file is markdown with minimal frontmatter:
 - `updated_at`
 - optional `expires_at`
 
-## Rules vs Notes
-
-| Kind | Behavior | Best for |
-| --- | --- | --- |
-| `rules/` | always injected | short standing instructions and durable conventions |
-| `notes/` | searched on demand | facts, references, and reusable context that should not bloat every prompt |
-
-Rules do not have TTLs. Notes can optionally expire.
-
 ## Scopes
 
-| Scope | Used in chat | Used in jobs | Notes |
+The tool-facing scopes are:
+
+- `agent`
+- `user`
+- `global`
+
+How they resolve:
+
+| Scope | Backing path | Available in chat | Available in jobs |
 | --- | --- | --- | --- |
-| `user` | private chats only | no | tied to the authenticated user context for the run |
-| `agent` | yes | yes | scoped to the current agent |
-| `global` | yes | yes | shared across agents |
+| `agent` | `agents/<agent>/memory/` | yes | yes |
+| `user` | `memory/users/<username>/` | private chats only | no |
+| `global` | `memory/global/` | yes | yes |
 
-Public channels never expose `user` scope.
+Why `user` scope is restricted:
 
-## Saving Behavior
+- it depends on an authenticated human identity
+- public channels should not quietly pull private user memory
+- jobs do not run as a user
 
-Memory tools use deterministic keys. Saving to an existing key replaces the file in place and updates its timestamps.
+## Saving Memory
 
-### `save_rule`
+Rules and notes are stored by deterministic key.
 
 ```text
 save_rule("response-style", "Lead with findings and keep summaries short.", scope="agent")
+save_note("release-window", "The next release goes out Fridays at 16:00 UTC.", scope="global")
+save_note("follow-up", "Ask again next week.", scope="user", ttl="7d")
 ```
 
-Use rules for short guidance that should shape every interaction.
+Saving with the same key replaces the file in place and updates timestamps.
 
-### `save_note`
-
-```text
-save_note("release-window", "The next release goes out on Fridays at 16:00 UTC.", scope="agent")
-save_note("launch-checklist", "Reminder to post to #announce after deploy.", scope="user", ttl="7d")
-```
-
-Notes support optional TTLs:
+TTL formats for notes:
 
 - `30m`
 - `1h`
 - `3d`
 - `2w`
 
-## Search
+## Reading And Searching
 
-`search_notes(query, scope="agent")` searches note files through the SQLite index at `~/.operator/db/memory_index.db`.
+Available memory tools:
+
+- `save_rule`
+- `save_note`
+- `search_notes`
+- `list_rules`
+- `list_notes`
+- `read_note`
+- `forget_rule`
+- `forget_note`
+
+Notes are searched through the SQLite index at `~/.operator/db/memory_index.db`.
 
 Search behavior:
 
-- FTS5 is always used for text search
-- if `defaults.embeddings` is configured and `sqlite-vec` is installed, Operator also stores vectors for semantic retrieval
-- the index is rebuilt from files, so the files remain the source of truth
+- FTS5 with Porter stemming is always available
+- the runtime reindexes changed files on startup
+- manual file edits should be followed by `operator memory index`
+
+If embeddings are configured and `sqlite-vec` is installed, note search also stores vectors for semantic matching.
 
 ## Forgetting And Expiry
 
-These tools move memory files to `trash/`:
+Operator does not hard-delete active memory by default.
 
-- `forget_rule(key, scope="...")`
-- `forget_note(key, scope="...")`
+- `forget_rule` moves a rule file to `trash/`
+- `forget_note` moves a note file to `trash/`
+- expired notes are swept into `trash/` automatically by the background runtime once per hour
 
-Expired notes are also swept to `trash/` automatically by the background runtime once per hour.
+This makes memory safer to debug because you can still inspect what was removed.
 
-## Tool Surface
+## How Rules Reach The Prompt
 
-Agents can use:
+Prompt assembly injects rules in this order:
 
-| Tool | Use it for |
-| --- | --- |
-| `save_rule` | create or replace a standing rule by key |
-| `save_note` | create or replace a searchable note by key |
-| `search_notes` | search notes by key and content |
-| `list_rules` | list active rules in a scope |
-| `list_notes` | list active notes in a scope |
-| `read_note` | read the full content of a note |
-| `forget_rule` | move a rule to trash |
-| `forget_note` | move a note to trash |
+1. global rules
+2. agent rules
+3. user rules when the run is private and user-scoped
 
-Example calls:
+Notes are never blindly injected. The agent must search for them.
 
-```text
-save_rule("daily-summary-style", "Use a short teaser plus a threaded deep dive.", scope="agent")
-save_note("slack-app-id", "A1234567890", scope="global")
-search_notes("release schedule", scope="agent")
-list_rules(scope="agent")
-read_note("slack-app-id", scope="global")
-```
+That keeps the prompt smaller and forces durable context to stay explicit.
+
+## Practical Guidance
+
+Use:
+
+- rules for stable style or policy constraints
+- notes for facts that may need lookup later
+- state for machine bookkeeping such as cursors and queues
+
+If a fact should shape every answer, it probably belongs in a rule.
+
+If a fact is only sometimes relevant, it probably belongs in a note.
 
 ## Debugging
 
@@ -141,18 +152,8 @@ operator memory search "release schedule" --scope agent:operator
 operator memory index
 ```
 
-Then inspect the files directly:
+Then inspect the files directly under:
 
-```text
-~/.operator/agents/operator/memory/
-~/.operator/memory/global/
-~/.operator/memory/users/<user>/
-```
-
-If you edit memory files by hand, run `operator memory index` so the search index catches up.
-
-## Related Docs
-
-- [Configuration](/configuration)
-- [Memory CLI](/cli/memory)
-- [Jobs](/concepts/jobs)
+- `~/.operator/agents/<agent>/memory/`
+- `~/.operator/memory/global/`
+- `~/.operator/memory/users/<user>/`

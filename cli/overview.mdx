@@ -3,13 +3,24 @@ title: "CLI Overview"
 description: "Command map for the operator CLI"
 ---
 
-The `operator` command is both the long-running runtime entrypoint and the management CLI.
+The `operator` command is both the runtime entrypoint and the management CLI.
 
-## Scan First
+## The Main Rule
 
-- Running `operator` with no subcommand starts the runtime.
-- Most CLI commands work without the background service running.
-- `operator tools` shows built-in tools only. Transport tools are runtime-only.
+Running:
+
+```sh
+operator
+```
+
+starts the long-running runtime.
+
+That runtime expects:
+
+- a valid `~/.operator/operator.yaml`
+- at least one configured transport in `agents:`
+
+Everything else in the CLI is for setup, inspection, and maintenance.
 
 ## Top-Level Commands
 
@@ -20,21 +31,26 @@ The `operator` command is both the long-running runtime entrypoint and the manag
 | `operator config` | print resolved config as JSON |
 | `operator agents` | list configured agents |
 | `operator tools` | list built-in tools |
-| `operator logs` | tail `operator.log` |
+| `operator logs` | tail `~/.operator/logs/operator.log` |
 
 ## Command Groups
 
 | Group | Purpose |
 | --- | --- |
 | `operator user ...` | users, identities, and roles |
-| `operator service ...` | launchd/systemd service management |
-| `operator job ...` | inspect, enable/disable, and manually run jobs |
+| `operator service ...` | launchd or systemd service management |
+| `operator job ...` | inspect, enable, disable, and manually run jobs |
 | `operator skills ...` | list discoverable skills and env status |
-| `operator memory ...` | inspect and reindex file-backed memory |
+| `operator memory ...` | inspect memories and rebuild the search index |
+
+Useful defaults:
+
+- `operator memory` is the same as `operator memory list global`
+- `operator skills` is the same as `operator skills list`
 
 ## Common Flows
 
-### First install
+### First Install
 
 ```sh
 pip install operator-ai
@@ -43,7 +59,7 @@ operator user add gavin --role admin slack U123ABC45
 operator
 ```
 
-### Inspect a running setup
+### Inspect A Running Setup
 
 ```sh
 operator config
@@ -52,33 +68,36 @@ operator tools
 operator logs -n 100
 ```
 
-### Service management
+### Run A Job Manually
 
 ```sh
-operator service install
-operator service start
-operator service status
+operator job list
+operator job info daily-summary
+operator job run daily-summary
+```
+
+### Reindex Memory After Manual Edits
+
+```sh
+operator memory index
 ```
 
 ## Reference Pages
 
 <CardGroup cols={2}>
-  <Card title="Runtime Commands" icon="terminal" href="/cli/runtime">
-    `operator`, `init`, `config`, `agents`, `tools`, and `logs`.
-  </Card>
   <Card title="Users" icon="users" href="/cli/users">
     Add users, link identities, inspect roles, and remove users.
   </Card>
   <Card title="Service" icon="server" href="/cli/service">
-    Manage launchd or systemd service installation and lifecycle.
+    Install Operator under launchd or systemd and manage its lifecycle.
   </Card>
   <Card title="Jobs" icon="clock" href="/cli/jobs">
-    Inspect, enable, disable, and manually run jobs.
+    Inspect job state, toggle jobs, and run them immediately.
   </Card>
   <Card title="Skills" icon="wand-magic-sparkles" href="/cli/skills">
-    List discoverable skills and missing env vars.
+    Confirm which skills are discoverable and whether env vars are missing.
   </Card>
   <Card title="Memory" icon="brain" href="/cli/memory">
-    Inspect file-backed memories and rebuild the search index.
+    Inspect scoped memory and rebuild the search index.
   </Card>
 </CardGroup>
