@@ -58,6 +58,8 @@ Removes a single identity mapping:
 operator user unlink gavin slack U08ALT111
 ```
 
+Current behavior removes the exact `transport:external_id` mapping. The positional `username` argument is still required by the command shape, but it is not used to verify that the identity belongs to that user before unlinking.
+
 ### `remove`
 
 Deletes the user and cascades:
