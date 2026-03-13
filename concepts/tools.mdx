@@ -1,162 +1,160 @@
 ---
 title: "Built-in Tools"
-description: "The tool surface Operator agents can use at runtime"
+description: "What tools Operator agents can use and how permissions affect them"
 ---
 
 Operator registers a built-in tool set and may add transport-specific tools at runtime.
 
-## Scan First
+## How Tool Availability Works
 
-- Permissions can hide tools from specific agents.
-- Some tools require runtime context to work correctly.
-- Transport tools only appear for the active transport.
-- `run_shell` is powerful and unaffected by sandboxing.
-- Memory tools need runtime memory to be enabled.
+Three gates control whether an agent can actually use a tool:
 
-## Tool Availability Rules
+1. the tool must be registered
+2. the agent must be allowed to use it through `permissions.tools`
+3. the current run must provide any required context such as a transport, memory store, or authenticated user
 
-There are three separate gates:
+Example:
 
-1. **Registration:** built-in tools are registered globally
-2. **Permissions:** `permissions.tools` may hide them from an agent
-3. **Runtime context:** some tools still need a transport, memory store, or agent context
+- `send_message` is always registered
+- it still fails if the current run has no transport
 
-Example: `save_memory` is registered, but it returns `memory system not configured` if runtime memory is off.
+`operator tools` lists only built-in tools. Transport tools such as Slack tools are added at runtime and do not appear in that CLI output.
 
-## Shell and Files
+## Files, Shell, And Web
 
-| Tool | Notes |
+| Tool | Purpose |
 | --- | --- |
-| `run_shell(command, timeout=120)` | runs `bash -c` from the agent workspace |
-| `read_file(path)` | reads a file, capped at 1 MB / 16 KB returned output |
-| `write_file(path, content)` | writes a file, creating parent directories |
-| `list_files(path=".", max_depth=2)` | lists non-hidden files and directories |
+| `read_file(path)` | read a file |
+| `write_file(path, content)` | write a file |
+| `list_files(path=".", max_depth=2)` | list files and directories |
+| `run_shell(command, timeout=120)` | run `bash -c` in the agent workspace |
+| `web_fetch(url, offset=0, limit=16000)` | fetch URL content as clean text |
 
-Important behavior:
+Technical details:
 
-- file paths resolve relative to the agent workspace
-- sandboxed agents cannot escape the workspace with file tools
-- unsandboxed agents may use absolute paths or parent traversal
-- `run_shell` is not sandboxed, only rooted at the workspace as `cwd`
-
-## Web
-
-| Tool | Notes |
-| --- | --- |
-| `web_fetch(url, offset=0, limit=16000)` | fetches text-friendly content and paginates large responses |
-
-`web_fetch` prefers:
-
-1. a `.md` variant of the URL when available
-2. clean text extraction from HTML
-3. raw text for already textual content
-
-It only returns text-like content. Unsupported binary types return an error string.
+- relative file paths resolve from the agent workspace
+- absolute paths are allowed
+- `read_file` reads up to 1 MB and truncates returned text to 16 KB
+- `list_files` skips hidden files and directories
+- `web_fetch` prefers `.md` variants when available and notes `llms.txt` support when detected
 
 ## Messaging
 
-| Tool | Notes |
+| Tool | Purpose |
 | --- | --- |
-| `send_message(channel="", text="", thread_id="")` | sends a message and returns the platform message ID |
-| `send_file(path, channel="", thread_id="")` | uploads a file and returns the platform message ID when supported |
+| `send_message(channel="", text="", thread_id="")` | post a message and return a platform message ID |
+| `send_file(path, channel="", thread_id="")` | upload a file and return a platform message ID |
 
 Defaults:
 
-- if `channel` is omitted, use the current conversation channel
-- if `thread_id` is omitted, use the current conversation thread
+- omitted `channel` means the current conversation channel
+- omitted `thread_id` means the current conversation thread
 
-`send_file` uses the same path-resolution and sandbox rules as file tools and rejects files over 50 MB.
+`send_file` rejects files over 50 MB.
 
-## Sub-Agents
-
-| Tool | Notes |
-| --- | --- |
-| `spawn_agent(task, context="", agent="")` | creates a focused child run and returns its final answer |
-
-Rules:
-
-- max depth is `3`
-- without `agent=`, the child inherits the current run context
-- with `agent=`, the child switches to that agent's config
+That fallback only exists for conversation-bound runs such as Slack chats. Jobs do not have a current channel or thread, so job prompts must pass `channel=...` explicitly.
 
 ## Memory
 
-| Tool | Notes |
+| Tool | Purpose |
 | --- | --- |
-| `save_memory(content, scope="user", retention="durable", pinned=false)` | stores a memory |
-| `search_memories(query, scope="", top_k=5)` | semantic lookup |
-| `forget_memory(memory_id)` | deletes a memory |
-| `list_memories(scope="", limit=50, offset=0)` | lists visible memories |
+| `save_rule` | create or replace a rule |
+| `save_note` | create or replace a note |
+| `search_notes` | search notes |
+| `list_rules` | list rules |
+| `list_notes` | list notes with pagination |
+| `read_note` | read one note |
+| `forget_rule` | move a rule to trash |
+| `forget_note` | move a note to trash |
 
-These tools require runtime memory to be active. In public channels, `user` scope is blocked.
+Memory tools use logical scopes:
 
-## Key-Value Store
+- `agent`
+- `user`
+- `global`
 
-| Tool | Notes |
+`user` scope is available only in private conversations.
+
+## State
+
+| Tool | Purpose |
 | --- | --- |
-| `kv_get(key, namespace="")` | returns a value or `[not found]` |
-| `kv_set(key, value, namespace="", ttl_hours=0)` | stores a value with optional TTL |
-| `kv_delete(key, namespace="")` | deletes a key |
-| `kv_list(namespace="", prefix="")` | lists keys for the current agent |
+| `get_state(key)` | read JSON state |
+| `set_state(key, value)` | write scalar state |
+| `append_state(key, value, max_items=0)` | append to list state |
+| `pop_state(key)` | remove and return the oldest list item |
+| `list_state()` | list all state keys |
+| `delete_state(key)` | delete a state key |
 
-KV data is always scoped to the current agent.
+State is file-backed JSON under `agents/<agent>/state/`.
 
-Use namespaces for grouping operational state like:
+Use state for machine bookkeeping such as:
 
 - cursors
-- watermarks
-- job checkpoints
 - dedupe keys
+- rolling queues
+- checkpoints
 
-## Jobs and Skills
+## Jobs And Skills
 
-| Tool | Notes |
+| Tool | Purpose |
 | --- | --- |
-| `manage_job(action, name="", config="")` | list, create, update, delete, enable, disable |
-| `manage_skill(action, name="", config="")` | list, create, update, delete |
-| `read_skill(skill, path="")` | read `SKILL.md`, references, or assets |
-| `run_skill(skill, command, timeout=120)` | execute a skill-related command |
+| `create_job`, `update_job`, `delete_job` | manage job definitions |
+| `enable_job`, `disable_job`, `list_jobs` | control job state |
+| `create_skill`, `update_skill`, `delete_skill`, `list_skills` | manage skills |
+| `read_skill` | read skill content or a specific file inside the skill |
+| `run_skill` | run a command in skill context |
 
-Key behavior:
+The job and skill management tools exist so agents do not have to compose raw frontmatter safely by hand.
 
-- `manage_job create/update` expects full `JOB.md` content
-- `manage_skill create/update` expects full `SKILL.md` content
-- `manage_job` validates cron, agent name, and hook path safety
-- `manage_job create` can scaffold placeholder hook scripts
-- `run_skill` uses `shell=False`, strips transport secrets, preserves `$OPERATOR_HOME`, and sets `SKILL_DIR`
+## Users
 
-## User Management
-
-| Tool | Notes |
+| Tool | Purpose |
 | --- | --- |
-| `manage_users(action, username="", role="", transport="", external_id="")` | runtime user and role management |
+| `manage_users(action, ...)` | list, add, remove, link, unlink, add_role, and remove_role |
+| `set_timezone(timezone)` | set the current user's timezone |
 
-`manage_users` is role-gated:
+Important detail:
 
-- requires the `admin` role
-- stays visible to the LLM
-- returns an error if the active user is not an admin
+- `manage_users` is not separately admin-gated inside the tool implementation
+- access control comes from whether the agent itself is allowed to use `manage_users`
 
-Its `add` action creates the user and assigns a role. Identity linking is a separate `link` action.
+Only give it to trusted agents.
 
-## Transport Tools
+## Delegation
 
-Transport tools are added at runtime. They do not appear in `operator tools`, which only lists built-in tools.
-
-Slack currently adds:
-
-| Tool | Notes |
+| Tool | Purpose |
 | --- | --- |
-| `list_channels()` | show cached postable channels |
-| `read_channel(channel, count=20)` | fetch recent channel messages |
-| `read_thread(channel, thread_id, count=50)` | fetch thread replies |
+| `spawn_agent(task, context="", agent="")` | run a focused child task in a fresh agent session |
 
-See [Slack](/transports/slack) for the Slack-specific runtime behavior.
+Behavior:
 
-## Choosing The Right Tool
+- omitting `agent` spawns a fresh run of the current agent
+- specifying `agent` switches to that target agent's own prompt, memory, workspace, tools, skills, and permissions
+- current user access restrictions still apply
+- max delegation depth is `3`
 
-- use **KV** for operational state
-- use **memory** for reusable human/project facts
-- use **jobs** for recurring autonomous workflows
-- use **skills** for reusable instructions and scripts
-- use **sub-agents** when a task benefits from isolation or a different agent persona
+## Slack Runtime Tools
+
+During Slack-backed runs, Operator adds:
+
+- `slack_find_users`
+- `slack_list_channels`
+- `slack_read_channel`
+- `slack_read_thread`
+- `slack_add_reaction`
+- `slack_remove_reaction`
+
+These are transport tools, not built-ins. They exist only when the current run is using the Slack transport.
+
+## Choosing The Right Primitive
+
+Use:
+
+- tools when the agent needs to do work now
+- skills when the agent needs reusable instructions
+- memory when the agent should remember durable knowledge
+- state when the runtime needs machine-readable bookkeeping
+- jobs when the work should happen on a schedule
+
+Keeping those separate is one of the main reasons Operator stays understandable as a system.

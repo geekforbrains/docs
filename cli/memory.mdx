@@ -1,0 +1,83 @@
+---
+title: "Memory CLI"
+description: "Inspect file-backed memory and rebuild the search index"
+---
+
+The memory CLI works on the file-backed memory system under `~/.operator/`.
+
+## Commands
+
+```sh
+operator memory
+operator memory list [scope]
+operator memory search <query> [--scope/-s SCOPE]
+operator memory index [--force]
+```
+
+The default `operator memory` invocation is the same as `operator memory list global`.
+
+## Scope Format
+
+Scopes use these strings:
+
+- `global`
+- `agent:<name>`
+- `user:<name>`
+
+Examples:
+
+- `global`
+- `agent:operator`
+- `user:gavin`
+
+## `list`
+
+```sh
+operator memory
+operator memory list global
+operator memory list agent:operator
+operator memory list user:gavin
+```
+
+Shows active rules and notes for the given scope.
+
+Displayed columns:
+
+- type
+- relative path
+- updated timestamp
+- expiry timestamp
+- content preview
+
+## `search`
+
+```sh
+operator memory search "release schedule"
+operator memory search "slack app" --scope agent:operator
+```
+
+Searches note memory through the SQLite index.
+
+If you have configured `defaults.embeddings` and installed `sqlite-vec`, the same index can also use vector search. The CLI surface stays the same either way.
+
+If search returns nothing on a fresh install, build the index first:
+
+```sh
+operator memory index
+```
+
+## `index`
+
+```sh
+operator memory index
+operator memory index --force
+```
+
+Rebuilds the search index in `~/.operator/db/memory_index.db`.
+
+Behavior:
+
+- default mode updates only changed files
+- `--force` rebuilds the full index from scratch
+
+Run this after manual edits to memory files.

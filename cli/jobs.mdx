@@ -13,7 +13,7 @@ operator job enable <job-name>
 operator job disable <job-name>
 ```
 
-The CLI is for inspection and control. Creating, updating, and deleting jobs is done by editing `JOB.md` files directly or via the runtime `manage_job` tool.
+The CLI is for inspection and control. Creating, updating, and deleting jobs is usually done by editing `JOB.md` files directly or through the runtime tools `create_job`, `update_job`, and `delete_job`.
 
 ## `list`
 
@@ -23,11 +23,11 @@ operator job list
 
 Shows one row per job with:
 
-- enabled/disabled state
+- enabled or disabled state
 - schedule
 - last run
 - last result
-- run/error/gate/skip counters
+- run, error, gate, and skip counters
 
 ## `info`
 
@@ -39,6 +39,8 @@ Shows:
 
 - frontmatter fields like name, schedule, enabled state, description, and path
 - runtime state like `last_run`, `last_result`, duration, errors, and counters
+
+The command resolves jobs by directory name first and falls back to frontmatter `name`.
 
 ## `run`
 
@@ -55,6 +57,11 @@ This command:
 
 That last point matters: any `send_message` call made by the job is printed to your terminal rather than posted to Slack.
 
+Two practical details:
+
+- jobs still need an explicit `channel=...` because there is no current conversation context during job execution
+- with `operator job run`, the CLI transport prints that destination label, for example `[send_message -> #general]`
+
 ## `enable` / `disable`
 
 ```sh
@@ -64,11 +71,6 @@ operator job disable daily-summary
 
 These commands rewrite the `enabled:` field in the job's YAML frontmatter.
 
-You may target:
-
-- the job directory name, when it matches
-- or the frontmatter `name`, if different
-
 ## Typical Workflow
 
 ```sh
@@ -77,8 +79,3 @@ operator job info daily-summary
 operator job run daily-summary
 operator job disable daily-summary
 ```
-
-## Related Docs
-
-- [Jobs](/concepts/jobs)
-- [Built-in Tools](/concepts/tools)

@@ -1,6 +1,6 @@
 ---
 title: "Skills"
-description: "List skills and reset bundled skills"
+description: "List discoverable skills and their environment status"
 ---
 
 The CLI skill commands are intentionally narrow.
@@ -10,11 +10,9 @@ The CLI skill commands are intentionally narrow.
 ```sh
 operator skills
 operator skills list
-operator skills reset <name>
-operator skills reset --all
 ```
 
-The CLI does **not** create or edit arbitrary skills. Use the filesystem or the `manage_skill` tool for that.
+The CLI does not create, edit, or reset skills. Use the filesystem or the runtime tools `create_skill`, `update_skill`, `delete_skill`, and `list_skills` for that.
 
 ## `skills` / `skills list`
 
@@ -23,7 +21,9 @@ operator skills
 operator skills list
 ```
 
-Shows:
+Both commands do the same thing.
+
+They show:
 
 - skill name
 - description
@@ -34,38 +34,15 @@ Shows:
 
 This is the fastest way to confirm that a skill is discoverable and whether its required environment variables are present.
 
-## `skills reset`
+## Typical Workflow
 
 ```sh
-operator skills reset skill-creator
-operator skills reset --all
+operator skills
+operator logs -n 50
 ```
 
-This only applies to bundled skills shipped with Operator.
+If a skill is missing from the list:
 
-Behavior:
-
-- deletes the local bundled skill directory
-- copies the original packaged version back in place
-
-If you run `operator skills reset` with no arguments, the CLI prints the available bundled skill names and usage help.
-
-<Warning>
-  Resetting a bundled skill discards local edits in that skill directory.
-</Warning>
-
-## Bundled Skills
-
-Current bundled skills:
-
-| Skill | Purpose |
-| --- | --- |
-| `job-creator` | helps agents create and update jobs correctly |
-| `skill-creator` | helps agents create and refine skills correctly |
-
-Missing bundled skills are also auto-installed during `operator init` and runtime startup.
-
-## Related Docs
-
-- [Skills](/concepts/skills)
-- [Built-in Tools](/concepts/tools)
+- confirm `~/.operator/skills/<name>/SKILL.md` exists
+- confirm the frontmatter is valid
+- check logs for parsing warnings

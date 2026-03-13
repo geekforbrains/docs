@@ -3,14 +3,24 @@ title: "CLI Overview"
 description: "Command map for the operator CLI"
 ---
 
-The `operator` command is both the long-running runtime entrypoint and the management CLI.
+The `operator` command is both the runtime entrypoint and the management CLI.
 
-## Scan First
+## The Main Rule
 
-- Running `operator` with no subcommand starts the runtime.
-- Most CLI commands work without the background service running.
-- Agent-aware commands resolve the agent from `--agent`, then `OPERATOR_AGENT`, then the default agent in config.
-- `operator tools` shows built-in tools only. Transport tools are runtime-only.
+Running:
+
+```sh
+operator
+```
+
+starts the long-running runtime.
+
+That runtime expects:
+
+- a valid `~/.operator/operator.yaml`
+- at least one configured transport somewhere under `agents:`
+
+Everything else in the CLI is for setup, inspection, and maintenance.
 
 ## Top-Level Commands
 
@@ -18,41 +28,38 @@ The `operator` command is both the long-running runtime entrypoint and the manag
 | --- | --- |
 | `operator` | start the runtime |
 | `operator init` | scaffold `~/.operator/` |
-| `operator setup` | guided onboarding |
 | `operator config` | print resolved config as JSON |
 | `operator agents` | list configured agents |
 | `operator tools` | list built-in tools |
-| `operator logs` | tail `operator.log` |
+| `operator logs` | tail `~/.operator/logs/operator.log` |
 
 ## Command Groups
 
 | Group | Purpose |
 | --- | --- |
 | `operator user ...` | users, identities, and roles |
-| `operator service ...` | launchd/systemd service management |
-| `operator job ...` | inspect, enable/disable, and manually run jobs |
-| `operator skills ...` | list skills and reset bundled skills |
-| `operator kv ...` | inspect the per-agent key-value store |
-| `operator memories ...` | inspect stored memories |
+| `operator service ...` | `launchd` or `systemd --user` service management |
+| `operator job ...` | inspect, enable, disable, and manually run jobs |
+| `operator skills ...` | list discoverable skills and env status |
+| `operator memory ...` | inspect memory and rebuild the search index |
+
+Useful defaults:
+
+- `operator memory` is the same as `operator memory list global`
+- `operator skills` is the same as `operator skills list`
 
 ## Common Flows
 
-### First install
+### First Install
 
 ```sh
 pip install operator-ai
-operator setup --run
-```
-
-### Manual scaffold
-
-```sh
 operator init
 operator user add gavin --role admin slack U123ABC45
 operator
 ```
 
-### Inspect a running setup
+### Inspect A Running Setup
 
 ```sh
 operator config
@@ -61,46 +68,36 @@ operator tools
 operator logs -n 100
 ```
 
-### Service management
+### Run A Job Manually
 
 ```sh
-operator service install
-operator service start
-operator service status
+operator job list
+operator job info daily-summary
+operator job run daily-summary
 ```
 
-## Agent Resolution
+### Reindex Memory After Manual Edits
 
-Commands like `operator kv ...` need an agent name. Resolution order is:
-
-1. explicit `--agent`
-2. `OPERATOR_AGENT`
-3. first configured agent in `operator.yaml`
-
-If config is missing and you did not provide `--agent`, the command exits with an error.
+```sh
+operator memory index
+```
 
 ## Reference Pages
 
 <CardGroup cols={2}>
-  <Card title="Runtime Commands" icon="terminal" href="/cli/runtime">
-    `operator`, `init`, `setup`, `config`, `agents`, `tools`, and `logs`.
-  </Card>
   <Card title="Users" icon="users" href="/cli/users">
     Add users, link identities, inspect roles, and remove users.
   </Card>
   <Card title="Service" icon="server" href="/cli/service">
-    Manage launchd or systemd service installation and lifecycle.
+    Install Operator under launchd or systemd and manage its lifecycle.
   </Card>
   <Card title="Jobs" icon="clock" href="/cli/jobs">
-    Inspect, enable, disable, and manually run jobs.
+    Inspect job state, toggle jobs, and run them immediately.
   </Card>
   <Card title="Skills" icon="wand-magic-sparkles" href="/cli/skills">
-    List skills and reset bundled skills.
+    Confirm which skills are discoverable and whether env vars are missing.
   </Card>
-  <Card title="KV Store" icon="database" href="/cli/kv">
-    Read and write the per-agent key-value store.
-  </Card>
-  <Card title="Memories" icon="brain" href="/cli/memories">
-    Inspect stored memories and memory counts by scope.
+  <Card title="Memory" icon="brain" href="/cli/memory">
+    Inspect scoped memory and rebuild the search index.
   </Card>
 </CardGroup>

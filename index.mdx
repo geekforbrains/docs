@@ -1,93 +1,101 @@
 ---
 title: "Operator"
-description: "Local AI agents for Slack, jobs, tools, and team workflows"
+description: "Local multi-agent runtime for Slack with markdown prompts, file-backed memory, jobs, skills, and real tools"
 ---
 
 <img src="/images/operator_banner.png" alt="Operator" />
 
-# Agents have joined the chat.
+# Local agents, normal files, real work.
 
-Operator is a local runtime for autonomous agents that live in Slack, use tools, remember context, and run scheduled jobs. The current transport is Slack. Agents, jobs, and skills are plain markdown files under `~/.operator/`.
+Operator runs named agents from `~/.operator/`, connects them to Slack, and keeps the important parts of the system in files you can inspect and edit.
 
-## Scan First
+The codebase is opinionated on purpose:
 
-- Slack-native today: DMs and `@mentions` in invited channels.
-- Local-first: state lives in `~/.operator/`, with SQLite in `~/.operator/state/operator.db`.
-- File-driven: agents use `AGENT.md`, jobs use `JOB.md`, skills use `SKILL.md`.
-- Team-aware: every inbound transport message is authenticated against users and roles.
-- Model-agnostic: model names use LiteLLM format like `anthropic/claude-sonnet-4-6`.
-- Transport/runtime tools are real: shell, files, web, messaging, jobs, skills, memory, KV, and sub-agents.
+- `AGENT.md` is the agent charter.
+- `JOB.md` is the scheduled task definition.
+- `SKILL.md` is reusable know-how.
+- memory lives in markdown files under `rules/` and `notes/`.
+- SQLite stores conversation history, identities, and indexes, but not the human-facing source of truth.
+
+Slack is the only runtime transport in the current code.
+
+## Start Here
 
 <CardGroup cols={2}>
   <Card title="Quickstart" icon="rocket" href="/quickstart">
-    Install Operator, run `operator setup`, and send your first Slack message.
+    Install Operator, scaffold `~/.operator/`, add Slack and model secrets, create the first admin, and send the first message.
+  </Card>
+  <Card title="Slack Setup" icon="message" href="/transports/slack">
+    Configure the Slack app, required scopes and events, thread-scoped sessions, and Slack-specific tools.
   </Card>
   <Card title="Configuration" icon="gear" href="/configuration">
-    Runtime, models, transports, permissions, memory, and roles.
+    Learn the real `operator.yaml` schema, defaults, permission groups, roles, and transport config.
   </Card>
-  <Card title="Agents" icon="robot" href="/concepts/agents">
-    Prompt files, workspaces, sandboxing, prompt assembly, and delegation.
-  </Card>
-  <Card title="Jobs" icon="clock" href="/concepts/jobs">
-    Cron jobs, hooks, transport behavior, inheritance, and counters.
-  </Card>
-  <Card title="Tools" icon="wrench" href="/concepts/tools">
-    Built-in tools, transport tools, and the behavior that matters in practice.
-  </Card>
-  <Card title="Slack" icon="message" href="/transports/slack">
-    Slack app setup, scopes, events, file support, and in-chat commands.
+  <Card title="Agents" icon="user-gear" href="/concepts/agents">
+    Split work across specialist agents with separate prompts, permissions, memory, state, and workspaces.
   </Card>
 </CardGroup>
 
-## What You Get
-
-- **Agents as teammates.** Each agent has its own prompt, workspace, model settings, permissions, and optional Slack transport.
-- **Sub-agent delegation.** Agents can call `spawn_agent(...)` to break work into focused sub-tasks, including cross-agent delegation.
-- **Jobs.** Scheduled markdown-defined jobs run every minute against cron schedules in your configured timezone.
-- **Users and roles.** Unknown users are rejected. Allowed agents are the union of the user's assigned roles. `admin` is built in.
-- **Optional long-term memory.** When memory services are enabled, Operator injects pinned and semantically relevant memories into live requests.
-- **Fallback chains and simple reasoning levels.** Configure `models:` as a failover list and `thinking:` as `off|low|medium|high`.
-
-## File Layout
+## What Lives On Disk
 
 ```text
 ~/.operator/
-├── operator.yaml              # Main config
-├── .env                       # API keys and transport secrets
-├── SYSTEM.md                  # Global system preamble
-├── shared/                    # Shared files for all agents
-├── logs/
-│   └── operator.log
-├── state/
-│   └── operator.db            # SQLite state
+├── operator.yaml
+├── .env
+├── SYSTEM.md
 ├── agents/
 │   └── <agent>/
 │       ├── AGENT.md
-│       └── workspace/
+│       ├── workspace/
+│       ├── memory/
+│       └── state/
 ├── jobs/
 │   └── <job>/
-│       ├── JOB.md
-│       └── scripts/
-└── skills/
-    └── <skill>/
-        ├── SKILL.md
-        ├── scripts/
-        ├── references/
-        └── assets/
+│       └── JOB.md
+├── skills/
+│   └── <skill>/
+│       └── SKILL.md
+├── memory/
+│   ├── global/
+│   └── users/
+├── shared/
+├── db/
+└── logs/
 ```
 
-## How A Request Flows
+Why this matters:
 
-1. A Slack DM, Slack `@mention`, or scheduled job starts a run.
-2. Operator loads config, resolves the agent, and assembles the system prompt from `SYSTEM.md`, `AGENT.md`, skills, and agent metadata.
-3. It renders creation-time stamps onto `user` messages in the configured timezone, for example `[Monday, 2026-03-09T09:22:40-07:00]`, and injects any conversation context it needs for the run.
-4. The agent runs a model/tool loop until it returns a final answer or hits `max_iterations`.
-5. Messages, job state, KV data, and memory state are stored in SQLite.
+- prompts are versionable
+- rules and notes stay readable
+- jobs and skills are plain files, not hidden dashboard state
+- work artifacts live in the workspace instead of disappearing into model history
 
-## Recommended Reading Order
+## Choose The Right Primitive
+
+| Use this | When you want |
+| --- | --- |
+| `AGENT.md` | a different role, mission, or standing behavior |
+| `permissions` | a tighter or broader execution boundary |
+| memory `rules/` | short instructions that should shape every future run |
+| memory `notes/` | durable knowledge that should be searched on demand |
+| state | machine bookkeeping like cursors, queues, and checkpoints |
+| skills | reusable instructions, references, scripts, and assets |
+| jobs | recurring work on a cron schedule |
+
+## Why The File-First Model Works
+
+- It is reviewable. You can diff prompt, job, and skill changes in git.
+- It is debuggable. If a rule exists, you can open the file that created it.
+- It is recoverable. The important state is still understandable without a web UI.
+- It keeps memory honest. Durable knowledge stays visible and scoped.
+
+## Read In This Order
 
 1. [Quickstart](/quickstart)
-2. [Configuration](/configuration)
-3. [Agents](/concepts/agents)
-4. [Slack](/transports/slack)
-5. [CLI Overview](/cli/overview)
+2. [Slack](/transports/slack)
+3. [Configuration](/configuration)
+4. [Agents](/concepts/agents)
+5. [Jobs](/concepts/jobs)
+6. [Built-in Tools](/concepts/tools)
+
+Once that loop is working, use the deeper pages for customization, permissions, memory, skills, and execution details.

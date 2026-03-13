@@ -33,12 +33,10 @@ Behavior:
 
 Platform details:
 
-- macOS: unload existing plist if present, write `~/Library/LaunchAgents/ai.operator.plist`, then load it
-- Linux: write `~/.config/systemd/user/operator.service`, run `daemon-reload`, and enable the unit
+- macOS: unloads the existing service if needed, writes `~/Library/LaunchAgents/ai.operator.plist`, then bootstraps it
+- Linux: writes `~/.config/systemd/user/operator.service`, reloads the user daemon, and enables the unit
 
-<Note>
-  On Linux, `install` enables the unit but does not start it. Run `operator service start` after installation.
-</Note>
+On Linux, `install` enables the unit but does not start it. Run `operator service start` after installation.
 
 ## `uninstall`
 
@@ -48,7 +46,7 @@ operator service uninstall
 
 Platform details:
 
-- macOS: unloads and removes the plist if present
+- macOS: bootouts and removes the plist if present
 - Linux: disables and stops the unit, removes the unit file, and reloads the user daemon
 
 ## `start`, `stop`, `restart`, `status`
@@ -81,7 +79,6 @@ The service definition embeds your current `PATH` so agents can find tools insta
 - Homebrew
 - pyenv
 - nvm
-- uv-installed shims
 - local package managers
 
 If you install new tools later, re-run:
