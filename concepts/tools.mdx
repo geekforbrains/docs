@@ -52,6 +52,8 @@ Defaults:
 
 `send_file` rejects files over 50 MB.
 
+That fallback only exists for conversation-bound runs such as Slack chats. Jobs do not have a current channel or thread, so job prompts must pass `channel=...` explicitly.
+
 ## Memory
 
 | Tool | Purpose |

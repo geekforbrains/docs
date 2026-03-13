@@ -16,7 +16,7 @@ A job is:
 - run as an agent
 - tracked with runtime state in SQLite
 
-The job prompt is internal. If you want output posted somewhere, call `send_message` from the job.
+The job prompt is internal. If you want output posted somewhere, call `send_message` or `send_file` from the job with an explicit destination.
 
 ## Example `JOB.md`
 
@@ -34,6 +34,21 @@ hooks:
 
 Summarize the key events from the last 24 hours.
 Post the short version to #general and keep the longer breakdown in the thread.
+```
+
+Why "explicit destination" matters:
+
+- jobs are not conversations
+- there is no current channel or thread to fall back to
+- `send_message` and `send_file` only know where to deliver output if you pass `channel=...` yourself
+
+Example:
+
+```python
+send_message(
+    channel="#general",
+    text="Daily summary is ready.",
+)
 ```
 
 Important fields:
@@ -92,6 +107,8 @@ At execution time Operator:
 7. records runtime state
 
 The job-specific system prompt explicitly tells the agent that plain text responses are internal and that it should use `send_message` to deliver output.
+
+It does not supply a default destination. If the job needs to post somewhere, the tool call must include the target channel explicitly.
 
 ## `prerun` Hooks
 
@@ -177,6 +194,8 @@ operator job run daily-summary
 This ignores the cron schedule and runs immediately.
 
 Important detail: manual runs use the CLI transport, so `send_message` output is printed to your terminal instead of being sent to Slack.
+
+That still requires an explicit `channel`. In a manual run, the CLI transport prints the channel label you passed instead of resolving a live Slack destination.
 
 ## Good Job Design
 

@@ -248,6 +248,20 @@ For Slack, the required fields are:
 
 `env` maps logical credential names to environment variable names. `settings` controls non-secret runtime behavior.
 
+Current Slack `settings` keys:
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `include_archived_channels` | `false` | include archived channels in the cached Slack channel snapshot |
+| `inject_channels_into_prompt` | `true` | inject the cached channel list into the system prompt |
+| `inject_users_into_prompt` | `true` | inject the cached workspace member list into the system prompt |
+| `expand_mentions` | `true` | rewrite outbound `@Name` and `#channel` text to explicit Slack mention tokens before sending |
+
+Important distinction:
+
+- `inject_channels_into_prompt` and `inject_users_into_prompt` change prompt content
+- `expand_mentions` changes outbound message rendering only
+
 ## `roles`
 
 Roles map users to allowed agents.

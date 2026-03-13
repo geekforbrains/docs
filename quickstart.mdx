@@ -89,11 +89,12 @@ Operator currently runs on Slack only.
 The short version:
 
 - enable Socket Mode
+- enable the App Home Messages tab if you want users to DM the bot
 - create an app-level token with `connections:write`
 - create a bot token
-- subscribe to `app_mention`, `message.im`, `reaction_added`, and `reaction_removed`
+- subscribe to the bot events Operator expects
 
-Use the full [Slack guide](/transports/slack) for the exact scopes and behavior.
+Use the full [Slack guide](/transports/slack) for the exact scopes, required events, DM setup, and the recommended cache-refresh events.
 
 ## 4. Create The First Admin User
 

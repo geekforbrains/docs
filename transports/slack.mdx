@@ -14,7 +14,7 @@ Slack is the only runtime transport in the current code.
 - Slack adds runtime-only tools for reading channels, threads, users, and reactions
 - user and channel snapshots can be injected into the system prompt
 
-## 1. Create The Slack App
+## 1. Create The App
 
 Create a Slack app and enable **Socket Mode**.
 
@@ -23,6 +23,8 @@ Create an app-level token with:
 - `connections:write`
 
 That becomes `SLACK_APP_TOKEN`.
+
+If you want users to DM the bot, also open **App Home** and enable the **Messages** tab. Operator does not publish a custom Home tab, but it does listen for direct messages via Slack's app-user conversation surface.
 
 ## 2. Add Bot Scopes
 
@@ -39,10 +41,15 @@ Under **OAuth & Permissions**, add these bot scopes:
 - `im:history`
 - `im:read`
 - `im:write`
+- `reactions:read`
 - `reactions:write`
 - `users:read`
 
-Why these exist:
+Optional but useful:
+
+- `users:read.email` if you want Slack email addresses available in `slack_find_users`
+
+Why these exist in the current implementation:
 
 - message ingress needs DM and mention access
 - Slack read tools need channel and thread history
@@ -52,14 +59,23 @@ Why these exist:
 
 ## 3. Subscribe To Events
 
-Subscribe to:
+Subscribe to these bot events for the default runtime behavior:
 
 - `app_mention`
 - `message.im`
 - `reaction_added`
 - `reaction_removed`
 
-The transport also listens to user and channel lifecycle events to keep its in-memory Slack snapshot fresh.
+To match the transport's cache-refresh behavior more closely, also subscribe to:
+
+- `team_join`
+- `user_change`
+- `channel_created`
+- `channel_rename`
+- `channel_archive`
+- `channel_unarchive`
+
+Those extra events are not required for basic messaging, but the code does listen for them to keep its in-memory user and channel snapshots fresher between restarts.
 
 ## 4. Configure Operator
 
@@ -104,24 +120,25 @@ slack:<agent-name>:<channel-id>:<root-thread-ts>
 
 That keeps each Slack thread isolated as a conversation.
 
-## What The Prompt Gets From Slack
+## What Slack Injects
 
-Slack can inject:
+Two different Slack context paths feed the model.
 
-- the current workspace user list
-- the current visible channel list
+System prompt extras:
+
 - thread-scoping instructions
+- the current workspace user list when `inject_users_into_prompt: true`
+- the current visible channel list when `inject_channels_into_prompt: true`
+
+Per-message context snapshots:
+
 - current message metadata such as `message_id`, `channel_id`, and `thread_id`
+- a one-time snapshot of earlier thread replies when the agent is first brought into an existing thread
+- buffered reaction events from messages already tied to the current conversation
 
-Prompt injection is configurable through:
+`expand_mentions` is separate from prompt injection. It controls outbound message rendering, rewriting plain `@Name` or `#channel` text into explicit Slack mention tokens before `send_message` or message updates are posted.
 
-- `inject_users_into_prompt`
-- `inject_channels_into_prompt`
-- `expand_mentions`
-
-When the agent is first brought into an existing thread, Operator can inject a one-time snapshot of earlier replies so the model can see what happened before it was mentioned.
-
-Reaction events are buffered and injected into the next request in the same conversation as lightweight system-event context.
+The channel and user snapshots are loaded on startup and refreshed again when the subscribed lifecycle events arrive.
 
 ## Slack Runtime Tools
 
@@ -184,14 +201,9 @@ Additional details:
 
 ## Snapshot Refresh
 
-Operator refreshes the Slack channel snapshot:
+Operator refreshes the Slack channel snapshot on startup and when the subscribed channel lifecycle events arrive.
 
-- on startup
-- after channel create
-- after channel rename
-- after archive and unarchive events
-
-The goal is current platform truth, not stale aliases.
+Operator refreshes the user snapshot on startup and when the subscribed user lifecycle events arrive.
 
 ## Common Debugging Checks
 

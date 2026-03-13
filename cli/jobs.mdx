@@ -57,6 +57,11 @@ This command:
 
 That last point matters: any `send_message` call made by the job is printed to your terminal rather than posted to Slack.
 
+Two practical details:
+
+- jobs still need an explicit `channel=...` because there is no current conversation context during job execution
+- with `operator job run`, the CLI transport prints that destination label, for example `[send_message -> #general]`
+
 ## `enable` / `disable`
 
 ```sh
