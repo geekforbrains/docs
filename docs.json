@@ -10,7 +10,7 @@
   "favicon": "/favicon.svg",
   "hero": {
     "title": "Agents have joined the chat.",
-    "description": "Local Slack-connected agents with markdown prompts, file-backed memory, scheduled jobs, and real tools.",
+    "description": "Local multi-agent runtime for Slack with markdown prompts, file-backed memory, jobs, skills, and real tools.",
     "image": {
       "href": "/images/operator_banner.png",
       "alt": "Operator - a monkey at the switchboard"

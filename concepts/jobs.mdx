@@ -1,196 +1,191 @@
 ---
 title: "Jobs"
-description: "Scheduled markdown-defined tasks with cron, hooks, runtime state, and queueing"
+description: "Scheduled runs, JOB.md files, hook scripts, and job tools"
 ---
 
-Jobs are for recurring work that should happen without waiting for a human to ask.
+Jobs are cron-scheduled agent runs defined in `~/.operator/jobs/<name>/JOB.md`.
 
-Each job lives at `~/.operator/jobs/<name>/JOB.md`. The file is the source of truth, and the scheduler reads it directly.
+Use a job when work should happen on a schedule instead of waiting for a human message.
 
-## When To Use A Job
+## The Mental Model
 
-Use a job when the work is:
+A job is:
 
-- recurring
-- asynchronous
-- better expressed as a prompt plus a little deterministic glue
+- a markdown file with YAML frontmatter
+- scanned once per minute
+- run as an agent
+- tracked with runtime state in SQLite
 
-Examples:
+The job prompt is internal. If you want output posted somewhere, call `send_message` from the job.
 
-- daily summaries
-- release reminders
-- recurring status reports
-- periodic cleanup or sync tasks
-
-## Job File Format
+## Example `JOB.md`
 
 ```yaml
 ---
 name: daily-summary
-description: Summarize yesterday's activity
+description: Summarize the last day of activity and post it to Slack.
 schedule: "0 9 * * *"
 agent: operator
-model: "anthropic/claude-sonnet-4-6"
-max_iterations: 10
 enabled: true
 hooks:
-  prerun: scripts/check.sh
-  postrun: scripts/publish.sh
+  prerun: scripts/prerun.sh
+  postrun: scripts/postrun.sh
 ---
 
 Summarize the key events from the last 24 hours.
-Post a short teaser to #general, then reply in a thread with the full summary.
+Post the short version to #general and keep the longer breakdown in the thread.
 ```
 
-The markdown body becomes the job's `user` message.
-
-Best practice: keep the directory name and frontmatter `name` aligned even though the runtime can still find a mismatched frontmatter name by scanning.
-
-## Scheduler Behavior
-
-The background runtime:
-
-- scans `jobs/*/JOB.md`
-- checks cron matches once per minute
-- evaluates cron schedules against the current UTC time
-- skips disabled jobs
-- serializes jobs per target agent through FIFO queues
-- allows different agents to run jobs concurrently
-
-Two runtime counters matter:
-
-- `skip_count` increments when the same job is due again while its previous run is still active
-- queued jobs for the same agent still run in order once the agent worker is free
-
-## Which Agent Runs The Job
-
-Agent resolution is:
-
-1. `job.agent`, if set
-2. otherwise the default agent from config
-
-That agent supplies:
-
-- `AGENT.md`
-- permissions
-- skill access
-- workspace
-- memory scope
-- `thinking`
-- `context_ratio`
-- `max_output_tokens`
-- default model chain when `job.model` is unset
-
-## What A Job Can Override
-
-Jobs can override only two execution settings:
+Important fields:
 
 | Field | Meaning |
 | --- | --- |
-| `model` | replace the resolved agent model chain with a single model |
-| `max_iterations` | override the resolved iteration cap |
+| `name` | job name used by the CLI and tools |
+| `schedule` | cron expression |
+| `description` | human-readable summary |
+| `agent` | which agent runs the job; default is the config default agent |
+| `model` | optional model override |
+| `max_iterations` | optional iteration override |
+| `enabled` | whether the job runs on schedule |
+| `hooks` | optional `prerun` and `postrun` scripts |
 
-Jobs do not support per-job overrides for:
+## Create Jobs Through Tools
 
-- `thinking`
-- `context_ratio`
-- `max_output_tokens`
+Agents do not need to compose raw frontmatter by hand. Operator ships typed job tools:
 
-If you need those to differ, point the job at a different agent.
+- `create_job`
+- `update_job`
+- `delete_job`
+- `enable_job`
+- `disable_job`
+- `list_jobs`
 
-## Hooks
+Example:
 
-```yaml
-hooks:
-  prerun: scripts/check.sh
-  postrun: scripts/publish.sh
+```python
+create_job(
+    name="daily-summary",
+    schedule="0 9 * * *",
+    prompt="Summarize the key events from the last 24 hours.\nPost to #general.",
+    agent="operator",
+    prerun=True,
+)
 ```
 
-Hook behavior:
+When `prerun=True` or `postrun=True`, the tool creates placeholder scripts at:
 
-| Hook | Behavior |
-| --- | --- |
-| `prerun` | runs before the model; non-zero exit gates the job and skips model execution |
-| `postrun` | runs after the final model output; receives that output on stdin |
+- `scripts/prerun.sh`
+- `scripts/postrun.sh`
 
-`prerun` stdout is injected into the prompt as:
+You can still edit `JOB.md` directly. The tools exist to keep creation and updates deterministic.
 
-```text
-<prerun_output>
-...
-</prerun_output>
+## How Jobs Run
+
+At execution time Operator:
+
+1. resolves the target agent
+2. runs the optional `prerun` hook
+3. builds a job-specific system prompt
+4. injects `<prerun_output>` if the hook produced stdout
+5. runs the agent
+6. runs the optional `postrun` hook with the final model output on stdin
+7. records runtime state
+
+The job-specific system prompt explicitly tells the agent that plain text responses are internal and that it should use `send_message` to deliver output.
+
+## `prerun` Hooks
+
+Use a prerun hook for deterministic work:
+
+- data collection
+- filtering
+- gating
+- date math
+- API calls that should not be repeated by the model
+
+Behavior:
+
+- stdout is injected into the prompt as `<prerun_output>`
+- non-zero exit code gates the run
+- gated runs increment the job's gate count
+
+Example:
+
+```bash
+#!/bin/bash
+set -euo pipefail
+
+curl -fsSL https://example.internal/report.json
 ```
 
-This is the main reason jobs are practical. Deterministic work stays in scripts. The model works on already-fetched or already-filtered data.
+## `postrun` Hooks
 
-Technical constraints:
+Use a postrun hook when the final output needs a deterministic follow-up step:
+
+- writing to an external API
+- validating output
+- formatting or packaging artifacts
+
+Behavior:
+
+- receives the agent output on stdin
+- non-zero exit marks the run as failed
+
+## Hook Boundaries
+
+Current implementation details:
 
 - hook paths must be relative
 - hook paths must stay inside the job directory
-- absolute paths and `..` escapes are rejected
-- the working directory is the job directory
+- absolute paths are rejected
 - timeout comes from `defaults.hook_timeout`
 
-Environment variables available to hooks:
+Hook processes receive these environment variables:
 
-| Variable | Value |
-| --- | --- |
-| `JOB_NAME` | current job name |
-| `JOB_DIR` | absolute path to the job directory |
-| `OPERATOR_AGENT` | agent running the job |
-| `OPERATOR_HOME` | active Operator base directory |
-| `OPERATOR_DB` | path to the active `operator.db` |
-
-## Transport Behavior
-
-Scheduled jobs use the selected agent's configured transport when one exists.
-
-That means:
-
-- a Slack-connected agent can post with `send_message` or `send_file`
-- a headless agent still runs the job, but transport-dependent tools return errors
-
-`operator job run <name>` behaves differently:
-
-- it ignores the cron schedule
-- it runs even if the job is disabled
-- it uses the CLI transport instead of Slack
-
-So if the job calls `send_message`, you see the output in the terminal instead of in Slack.
-
-## Memory In Jobs
-
-Jobs do not use user-scoped memory.
-
-Available memory scopes during job execution:
-
-- `agent`
-- `global`
-
-That keeps scheduled work from depending on one user's private conversation context.
+- `JOB_NAME`
+- `JOB_DIR`
+- `OPERATOR_AGENT`
+- `OPERATOR_HOME`
+- `OPERATOR_DB`
 
 ## Runtime State
 
-Each job stores persistent runtime counters in SQLite:
+Operator stores per-job runtime state:
 
-| Field | Meaning |
-| --- | --- |
-| `last_run` | timestamp of the last attempt |
-| `last_result` | `success`, `error`, or `gated` |
-| `last_duration_seconds` | rounded duration |
-| `last_error` | error string for the last failed run |
-| `run_count` | runs that reached execution |
-| `error_count` | failed runs |
-| `gate_count` | prerun-gated runs |
-| `skip_count` | scheduler skips because a previous run of the same job was still active |
+- last run time
+- last result
+- last duration
+- last error
+- run count
+- error count
+- gate count
+- skip count
 
-Use `operator job list` and `operator job info <name>` to inspect this state quickly.
+Use the CLI to inspect it:
 
-## Creating And Updating Jobs
+```sh
+operator job list
+operator job info daily-summary
+```
 
-You have two supported paths:
+## Run A Job Manually
 
-1. edit files directly under `~/.operator/jobs/`
-2. use the deterministic tools `create_job`, `update_job`, `delete_job`, `enable_job`, `disable_job`, and `list_jobs`
+```sh
+operator job run daily-summary
+```
 
-The job tools are safer for agent-authored changes because they take structured fields instead of raw YAML and can scaffold placeholder hook scripts automatically.
+This ignores the cron schedule and runs immediately.
+
+Important detail: manual runs use the CLI transport, so `send_message` output is printed to your terminal instead of being sent to Slack.
+
+## Good Job Design
+
+Keep the job prompt focused on interpretation and output.
+
+Push deterministic work into hooks when:
+
+- the same API call would happen every run
+- the result should gate the run
+- the result is better handled in shell than in model reasoning
+
+That keeps jobs faster, cheaper, and easier to debug.

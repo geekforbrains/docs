@@ -1,46 +1,20 @@
 ---
 title: "Skills"
-description: "Reusable instruction modules with optional references, assets, and scripts"
+description: "Reusable instructions, SKILL.md layout, and skill execution"
 ---
 
-Skills are reusable know-how. They teach an agent how to do a class of work without hard-coding every detail into `AGENT.md`.
+Skills are reusable capabilities stored under `~/.operator/skills/<name>/SKILL.md`.
 
-Each skill lives at `~/.operator/skills/<name>/SKILL.md`.
+They are not tools. A skill teaches an agent how to do a class of work. The agent still chooses which tools to use while following that skill.
 
-## Why Skills Exist
+## What A Skill Looks Like
 
-Use a skill when the knowledge is:
-
-- reusable across agents
-- specific enough that it would bloat the base prompt
-- better taught as instructions plus references or scripts
-
-Good examples:
-
-- PR review process
-- docs publishing workflow
-- a house style for release notes
-- an internal deployment procedure
-
-## Directory Layout
-
-```text
-~/.operator/skills/
-└── docs-auditor/
-    ├── SKILL.md
-    ├── scripts/
-    ├── references/
-    └── assets/
-```
-
-Only `SKILL.md` is required.
-
-## `SKILL.md`
+Example `SKILL.md`:
 
 ```yaml
 ---
 name: docs-auditor
-description: Reviews documentation for accuracy against the codebase and rewrites outdated pages.
+description: Audits a docs site against the current source code and rewrites stale pages.
 metadata:
   env:
     - GITHUB_TOKEN
@@ -48,119 +22,111 @@ metadata:
 
 # Docs Auditor
 
-1. Inspect the relevant code paths first.
-2. Treat the code as the source of truth.
-3. Fix inaccurate docs before polishing wording.
-4. Prefer small, example-driven guides over vague prose.
+## When To Use
+
+Use when the user asks to compare docs against code and bring them back into sync.
+
+## Workflow
+
+1. Read the source of truth first.
+2. Identify the public surface area.
+3. Rewrite the docs in the order a new user would need them.
 ```
 
-Frontmatter is what the runtime uses for discovery:
+## How Skills Are Discovered
+
+Operator scans `~/.operator/skills/` and reads each `SKILL.md` frontmatter.
+
+Discovery uses:
 
 - `name`
 - `description`
 - optional `metadata.env`
 
-## Discovery Model
+If required env vars are missing, the skill is still listed, but marked as missing env.
 
-Skills are loaded progressively:
+## Create Skills Through Tools
 
-1. the system prompt gets only skill name and description
-2. the agent calls `read_skill(...)` when it needs the skill body or a reference file
-3. the agent calls `run_skill(...)` when the skill includes scripts or commands
+Agents can manage skills with typed tools:
 
-Why it works this way:
+- `create_skill`
+- `update_skill`
+- `delete_skill`
+- `list_skills`
 
-- the base prompt stays small
-- detailed instructions are available on demand
-- large references do not pollute every conversation
+Example:
 
-## Skill Permissions
-
-Skill access is separate from tool access.
-
-```yaml
-permissions:
-  skills: [docs-auditor]
+```python
+create_skill(
+    name="pr-reviewer",
+    description="Reviews pull requests and reports logic, safety, and test coverage issues.",
+    instructions="# PR Reviewer\n\n1. Fetch the diff\n2. Review for risks\n3. Return findings first",
+    env="GITHUB_TOKEN",
+)
 ```
 
-That means:
+Name rules match the current validator:
 
-- an agent may be allowed to see only one skill
-- an agent may be able to read a skill but still lack unrelated tools
-- `skills: "*"` grants discovery of every skill
+- lowercase alphanumeric plus hyphens
+- 1 to 64 characters
+- no leading or trailing hyphen
+- no consecutive hyphens
 
-## `read_skill`
+## Reading And Running Skills
 
-`read_skill(skill, path="")` reads:
+Operator also exposes skill access tools:
 
-- `SKILL.md` when `path` is empty
-- a specific file inside the skill directory when `path` is set
+- `read_skill(skill, path="")`
+- `run_skill(skill, command, timeout=120)`
 
-Path traversal is blocked, so the call cannot escape the skill directory.
+Use `read_skill` first when the skill has references, scripts, or assets you need to inspect.
 
-## `run_skill`
+`run_skill` is for deterministic execution in skill context, such as:
 
-`run_skill(skill, command, timeout=120)` executes a command in skill context.
+- running a helper script from `scripts/`
+- using a checked-in reference file from `references/`
+- invoking an asset pipeline from `assets/`
 
-Important runtime behavior:
+## Skill Directory Structure
 
-- command strings are parsed with `shlex`
-- execution uses `shell=False`
-- pipes, redirects, and chaining are not available unless you explicitly invoke a shell yourself
-- subprocess `cwd` is the current agent workspace
-- `SKILL_DIR` is set automatically
-- arguments starting with `scripts/`, `references/`, or `assets/` are expanded to absolute paths inside the skill
+A good skill keeps `SKILL.md` short and moves bulk content into subdirectories:
 
-Security and hygiene details:
-
-- transport secret env vars are stripped before execution
-- most `OPERATOR_*` vars are stripped
-- `$OPERATOR_HOME` is preserved
-- `$VAR` and `${VAR}` references are expanded after sanitization
-
-That keeps skill scripts useful without quietly inheriting Slack tokens or unstable runtime-only state.
-
-## Environment Variables
-
-Declare required env vars in frontmatter:
-
-```yaml
-metadata:
-  env:
-    - GITHUB_TOKEN
-    - STRIPE_API_KEY
+```text
+skills/<name>/
+├── SKILL.md
+├── scripts/
+├── references/
+└── assets/
 ```
 
-Missing env vars appear in:
+Why this is useful:
 
-- `operator skills`
-- `operator skills list`
-- the skill metadata block injected into the agent prompt
+- `SKILL.md` stays readable
+- references can grow without bloating prompt context
+- scripts stay executable and versioned with the skill
 
-## Creating And Updating Skills
+## How `run_skill` Works
 
-You have two supported paths:
+Technical details from the implementation:
 
-1. edit files directly in `~/.operator/skills/`
-2. use the deterministic tools `create_skill`, `update_skill`, `delete_skill`, and `list_skills`
+- the command string is parsed with `shlex.split`
+- the process runs with `shell=False`
+- `scripts/`, `references/`, and `assets/` path prefixes are expanded to absolute skill paths
+- the process runs in the current agent workspace
+- `SKILL_DIR` is set in the environment
+- transport secret env vars are stripped
+- `OPERATOR_*` env vars are stripped except `OPERATOR_HOME`
 
-The tool-based path enforces:
+That design makes skill scripts portable while avoiding accidental secret leakage.
 
-- lowercase alphanumeric plus hyphen skill names
-- max 64 characters
-- required description
-- non-empty instructions
+## Good Skill Boundaries
 
-It also warns when the body is longer than 500 lines, which is usually a sign that content should be split into `references/` files instead.
+Use a skill when the reusable part is instruction and procedure.
 
-## Authoring Guidance
+Use an agent when the reusable part is identity and permissions.
 
-Write skills the same way you would brief a capable teammate:
+Use memory when the reusable part is durable knowledge.
 
-- explain when to use the skill
-- define the order of operations
-- include concrete examples
-- keep rare edge-case detail in `references/`
-- put executable helpers in `scripts/`
+Use a tool when the reusable part is executable behavior.
 
-Use `$OPERATOR_HOME` inside scripts or instructions instead of hard-coding `~/.operator`. It works in more contexts and matches the runtime environment.
+Keeping those separate is what makes Operator understandable at scale.

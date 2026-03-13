@@ -3,12 +3,12 @@ title: "Quickstart"
 description: "Install Operator, connect Slack, create the first admin, and send the first message"
 ---
 
-This is the shortest path to a working Operator install. Keep the starter setup simple, prove the runtime works, then tighten permissions and add more agents.
+This is the shortest path to a working install. Start with the generated layout, prove the runtime works, then tighten permissions and add more agents.
 
 ## Fast Path
 
 1. Install the package and scaffold `~/.operator/`.
-2. Add a model API key and Slack tokens to `.env`.
+2. Add your model API key and Slack tokens.
 3. Create your first admin user.
 4. Start the runtime.
 5. DM the bot or mention it in Slack.
@@ -26,31 +26,28 @@ If the `operator` script is not on your `PATH` yet:
 python3 -m operator_ai init
 ```
 
-`operator init` creates the default home under `~/.operator/` and writes:
+`operator init` writes the starter files:
 
-- `operator.yaml`
-- `.env`
-- `SYSTEM.md`
-- `agents/operator/AGENT.md`
-- the default jobs, skills, shared, db, logs, workspace, memory, and state directories
+- `~/.operator/operator.yaml`
+- `~/.operator/.env`
+- `~/.operator/SYSTEM.md`
+- `~/.operator/agents/operator/AGENT.md`
 
-It also writes starter `permission_groups` and a single Slack-connected `operator` agent with full tool and skill access so you can get a first run working quickly.
+It also creates the default layout for jobs, skills, shared files, logs, memory, state, and the starter `operator` agent workspace.
 
-If `operator.yaml` already exists, the command prompts before overwriting it. `operator init --force` overwrites `operator.yaml` without prompting, but keeps existing `.env` and `AGENT.md` files.
+The generated config is intentionally permissive for the first run:
 
-## 2. Create The Slack App
+- one `operator` agent
+- full tool access
+- full skill access
+- Slack transport wired through env vars
+- starter `permission_groups` you can reuse later
 
-Operator currently supports Slack as its runtime transport.
+If `operator.yaml` already exists, `operator init` prompts before overwriting it. Use `operator init --force` to replace `operator.yaml` without touching your existing `.env` or `AGENT.md` files.
 
-Create a Slack app, enable Socket Mode, add the required bot scopes, subscribe to the required events, and install the app to your workspace. The full setup is on the [Slack guide](/transports/slack). The short version is:
+## 2. Add Secrets
 
-- create an app-level token with `connections:write`
-- create a bot token
-- subscribe to `app_mention`, `message.im`, `reaction_added`, and `reaction_removed`
-
-## 3. Add Secrets
-
-Put the secrets in `~/.operator/.env`:
+Put your secrets in `~/.operator/.env`:
 
 ```sh
 ANTHROPIC_API_KEY=sk-ant-...
@@ -58,17 +55,14 @@ SLACK_BOT_TOKEN=xoxb-...
 SLACK_APP_TOKEN=xapp-...
 ```
 
-Use the provider key that matches your configured model IDs. The generated config defaults to:
+The generated starter config points the default agent at Slack and uses the first model in `defaults.models`:
 
 ```yaml
 defaults:
   models:
     - "anthropic/claude-sonnet-4-6"
-```
+  thinking: "off"
 
-The default config also wires the starter agent to Slack:
-
-```yaml
 agents:
   operator:
     permissions:
@@ -86,13 +80,24 @@ agents:
         expand_mentions: true
 ```
 
-<Note>
-  `runtime.env_file` is loaded with `setdefault` semantics. Values already present in your shell environment win over values from `.env`.
-</Note>
+`runtime.env_file` is loaded with `setdefault` semantics, so variables already present in your shell win over values from `.env`.
+
+## 3. Create The Slack App
+
+Operator currently runs on Slack only.
+
+The short version:
+
+- enable Socket Mode
+- create an app-level token with `connections:write`
+- create a bot token
+- subscribe to `app_mention`, `message.im`, `reaction_added`, and `reaction_removed`
+
+Use the full [Slack guide](/transports/slack) for the exact scopes and behavior.
 
 ## 4. Create The First Admin User
 
-Operator does not auto-create users. Until you add one, inbound Slack messages are rejected.
+Operator does not auto-create users. Until you add one, inbound messages are rejected.
 
 Create yourself as the first admin:
 
@@ -100,7 +105,7 @@ Create yourself as the first admin:
 operator user add yourname --role admin slack YOUR_SLACK_USER_ID
 ```
 
-That command creates the user record, assigns the `admin` role, and links the Slack identity in one step.
+That command creates the user, assigns the `admin` role, and links the Slack identity in one step.
 
 ## 5. Start The Runtime
 
@@ -119,26 +124,26 @@ operator service start
 
 Platform detail:
 
-- macOS: `service install` writes the plist and loads it immediately.
-- Linux: `service install` writes the user unit and enables it, but you still need `operator service start`.
+- macOS: `service install` writes and loads a `launchd` plist immediately
+- Linux: `service install` writes the user unit and enables it, then `service start` starts it
 
 ## 6. Send The First Message
 
 Once the runtime is running:
 
 1. invite the Slack app to a channel if you want channel access
-2. DM the bot or `@mention` it in an invited channel
-3. send a simple message such as `hello`
+2. DM the bot or mention it in a channel
+3. send something simple like `hello`
 
 Slack sessions are intentionally thread-scoped:
 
 - a top-level DM starts a new session
-- a top-level channel mention starts a new session thread
-- later channel replies count as new input only when they mention the agent again
+- a top-level channel mention starts a new thread session
+- later replies count as new input only when they mention the agent again
 
-If the agent needs context outside that thread, it uses Slack tools such as `slack_read_channel` or `slack_read_thread`.
+If you send `stop` or `cancel`, Operator cancels the in-flight request for that conversation.
 
-## 7. Run The Basic Checks
+## 7. Run The First Checks
 
 ```sh
 operator config
@@ -147,12 +152,12 @@ operator tools
 operator logs -n 50
 ```
 
-These confirm that:
+These verify that:
 
 - config parses
-- the configured agents are visible
+- the agent exists
 - built-in tools are registered
-- the runtime is logging normally
+- logs look normal
 
 ## What To Change Next
 

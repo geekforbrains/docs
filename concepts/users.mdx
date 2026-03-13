@@ -40,11 +40,11 @@ Rules:
 
 ## Runtime Auth Flow
 
-On each incoming Slack message, Operator:
+On each incoming message, Operator:
 
 1. resolves the transport identity such as `slack:U04ABC123`
 2. maps it to a username
-3. loads that user's roles
+3. loads that user's roles and timezone
 4. resolves the allowed agents from config
 5. rejects the message if the target agent is not allowed
 
@@ -70,8 +70,8 @@ Timezone is stored on the user record, not in `operator.yaml`.
 
 Why that matters:
 
-- live user messages are timestamped in the user's timezone when available
-- the timezone appears in the prompt context
+- live user messages are timestamped in that user's timezone when available
+- the timezone appears in prompt context
 - jobs do not use user timezone because jobs run without a user context
 
 Users can set their own timezone during chat:

@@ -71,7 +71,7 @@ Memory tools use logical scopes:
 - `user`
 - `global`
 
-`user` scope is available only in private user conversations.
+`user` scope is available only in private conversations.
 
 ## State
 
@@ -100,10 +100,10 @@ Use state for machine bookkeeping such as:
 | `create_job`, `update_job`, `delete_job` | manage job definitions |
 | `enable_job`, `disable_job`, `list_jobs` | control job state |
 | `create_skill`, `update_skill`, `delete_skill`, `list_skills` | manage skills |
-| `read_skill` | read skill content or a specific file in the skill |
+| `read_skill` | read skill content or a specific file inside the skill |
 | `run_skill` | run a command in skill context |
 
-The job and skill management tools exist so agents do not have to compose raw markdown frontmatter safely by hand.
+The job and skill management tools exist so agents do not have to compose raw frontmatter safely by hand.
 
 ## Users
 
@@ -155,4 +155,4 @@ Use:
 - state when the runtime needs machine-readable bookkeeping
 - jobs when the work should happen on a schedule
 
-Keeping those separate is one of the main reasons Operator stays understandable as a system instead of collapsing everything into hidden prompt state.
+Keeping those separate is one of the main reasons Operator stays understandable as a system.

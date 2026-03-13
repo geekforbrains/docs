@@ -1,16 +1,18 @@
 ---
 title: "Slack"
-description: "Slack app setup, thread-scoped session behavior, transport tools, and file handling"
+description: "Slack app setup, thread-scoped sessions, transport tools, and file handling"
 ---
 
 Operator uses Slack Socket Mode. You do not need a public webhook URL.
 
-## What Slack Currently Means In Operator
+Slack is the only runtime transport in the current code.
 
-- Slack is the only runtime transport implemented in current code.
-- DMs and channel mentions are the supported inbound entry points.
-- Sessions are thread-scoped on purpose.
-- Slack adds runtime-only tools for reading channels, threads, users, and reactions.
+## What Slack Means In Operator
+
+- DMs and channel mentions are the inbound entry points
+- sessions are thread-scoped on purpose
+- Slack adds runtime-only tools for reading channels, threads, users, and reactions
+- user and channel snapshots can be injected into the system prompt
 
 ## 1. Create The Slack App
 
@@ -46,7 +48,7 @@ Why these exist:
 - Slack read tools need channel and thread history
 - outbound messaging and uploads need write scopes
 - reaction tools and reaction system events need reaction access
-- prompt injection and user resolution need `users:read`
+- prompt injection and name resolution need user and channel reads
 
 ## 3. Subscribe To Events
 
@@ -57,9 +59,9 @@ Subscribe to:
 - `reaction_added`
 - `reaction_removed`
 
-Slack cache maintenance events such as user changes and channel lifecycle events are handled by the transport and keep the in-memory Slack snapshot fresh.
+The transport also listens to user and channel lifecycle events to keep its in-memory Slack snapshot fresh.
 
-## 4. Install The App And Configure Operator
+## 4. Configure Operator
 
 Put the Slack secrets in `~/.operator/.env`:
 
@@ -90,60 +92,60 @@ agents:
 Slack conversations are intentionally thread-scoped.
 
 - a top-level DM starts a new session
-- a top-level channel mention starts a new session thread
-- later replies in that channel thread count as new input only when they mention the agent again
-- unmentioned chatter in the thread is ignored unless the agent deliberately reads it with Slack tools
+- a top-level channel mention starts a new thread session
+- later replies count as new input only when they mention the agent again
+- unmentioned chatter in the thread is ambient context unless the agent reads it deliberately with Slack tools
 
-The conversation ID is built from:
+Conversation IDs are built like this:
 
 ```text
 slack:<agent-name>:<channel-id>:<root-thread-ts>
 ```
 
-That keeps sessions isolated around the Slack thread root.
+That keeps each Slack thread isolated as a conversation.
 
 ## What The Prompt Gets From Slack
 
-Slack transport can inject:
+Slack can inject:
 
 - the current workspace user list
 - the current visible channel list
 - thread-scoping instructions
-- message metadata such as `message_id`, `channel_id`, and `thread_id`
+- current message metadata such as `message_id`, `channel_id`, and `thread_id`
 
-Prompt injection is configurable:
+Prompt injection is configurable through:
 
 - `inject_users_into_prompt`
 - `inject_channels_into_prompt`
 - `expand_mentions`
 
-When the agent is first brought into an existing thread, Operator may inject a one-time snapshot of earlier replies so the model can see the thread history it missed before it was mentioned.
+When the agent is first brought into an existing thread, Operator can inject a one-time snapshot of earlier replies so the model can see what happened before it was mentioned.
 
-Reaction events are buffered and injected into the next request in the same conversation as system-event context.
+Reaction events are buffered and injected into the next request in the same conversation as lightweight system-event context.
 
-## Transport Tools
+## Slack Runtime Tools
 
 These tools exist only during live Slack-backed runs:
 
 | Tool | Use it for |
 | --- | --- |
-| `slack_find_users(query="", limit=20, linked_only=false)` | find Slack users by display name, handle, Slack ID, email, or linked Operator username |
+| `slack_find_users(query="", limit=20, linked_only=false)` | find Slack users by display name, Slack ID, email, or linked Operator username |
 | `slack_list_channels(query="")` | list postable channels from the current Slack snapshot |
 | `slack_read_channel(channel, count=20)` | fetch recent channel messages |
 | `slack_read_thread(channel, thread_id, count=50)` | fetch replies from a thread |
 | `slack_add_reaction(channel, message_id, emoji)` | add a reaction |
 | `slack_remove_reaction(channel, message_id, emoji)` | remove a reaction |
 
-The built-in `send_message` tool also works with Slack channel names such as `#general` or raw channel IDs.
+The built-in `send_message` tool also works with Slack channel names like `#general` or raw channel IDs.
 
 Mention guidance:
 
 - use `@Name` only when the display name is unambiguous
 - when in doubt, call `slack_find_users` and use the returned explicit `<@UID>` mention
 
-## Stop And Cancel
+## Stop And Busy Handling
 
-If a message is exactly `stop` or `cancel` after trimming whitespace and lowercasing, the runtime handles it directly.
+If a message is exactly `stop` or `cancel`, Operator handles it directly.
 
 That message:
 
@@ -156,7 +158,7 @@ If the conversation is idle, Operator replies:
 No active request to stop.
 ```
 
-If a second request arrives while the same conversation is still busy, Operator replies:
+If a second request arrives while the same conversation is still running, Operator replies:
 
 ```text
 Still processing a request. Say `stop` to stop it.
@@ -177,23 +179,21 @@ Behavior by file type:
 Additional details:
 
 - duplicate filenames get suffixed
-- downloads larger than 50 MB are rejected
+- transport downloads over 50 MB are rejected
 - outbound uploads use Slack `files.upload_v2`
 
-## Channel Snapshot Behavior
+## Snapshot Refresh
 
-Operator refreshes the channel snapshot:
+Operator refreshes the Slack channel snapshot:
 
 - on startup
 - after channel create
 - after channel rename
 - after archive and unarchive events
 
-The goal is current platform truth, not stale aliases. If a channel is renamed, the injected list is refreshed so the old name does not linger in the prompt.
+The goal is current platform truth, not stale aliases.
 
 ## Common Debugging Checks
-
-Start here when Slack does not behave the way you expect:
 
 ```sh
 operator logs -n 100

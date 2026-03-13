@@ -1,9 +1,11 @@
 ---
-title: "Models & Thinking"
-description: "Fallback chains, reasoning levels, context trimming, and per-run inheritance"
+title: "Models & Execution"
+description: "Fallback chains, thinking levels, context trimming, timestamps, and provider-specific behavior"
 ---
 
 Operator uses LiteLLM model IDs such as `anthropic/claude-sonnet-4-6` or `openai/gpt-4.1`.
+
+This page covers the runtime behavior around those models, not just the config fields.
 
 ## Fallback Chains
 
@@ -22,7 +24,7 @@ Per model call, Operator:
 2. retries the same request with the next model if the current one errors or returns an unusable response
 3. continues with the first model that returns a valid message
 
-Fallback happens per live call, not per conversation. One conversation can use different providers on different turns if failures occur.
+Fallback happens per live call, not per conversation.
 
 ## Thinking Levels
 
@@ -38,36 +40,34 @@ Supported values:
 - `medium`
 - `high`
 
-Operator maps these to provider reasoning controls when the model supports them. When the model does not support reasoning control, Operator drops the provider-specific parameter and continues.
+Operator maps these to provider reasoning controls when the concrete model supports them.
 
-Important implementation detail:
+Important behavior from the implementation:
 
-- for Anthropic models, `thinking: off` omits `reasoning_effort` entirely for compatibility
-- for other supported models, `off` generally maps to `reasoning_effort="none"`
+- Anthropic with `thinking: off` omits `reasoning_effort` entirely for compatibility
+- when a model supports reasoning control, Operator maps the level to `reasoning_effort`
+- when a model does not support reasoning control, Operator logs and continues without it
 
 ## OpenAI Responses Bridge
 
-When a model both:
+When all of these are true:
 
-- supports reasoning controls
-- and the run includes tools
+- the request has tools
+- the model supports reasoning control
+- the provider resolves to OpenAI
 
-Operator may switch OpenAI requests onto LiteLLM's Responses bridge automatically.
+Operator routes the request through LiteLLM's Responses bridge automatically.
 
-Why this exists:
+You still configure the model normally. The bridge selection is runtime behavior, not a different config shape.
 
-- it keeps tool use and reasoning control working together more reliably on supported OpenAI models
+## Job And Sub-Agent Resolution
 
-You still configure the model normally. The bridge selection is internal request logic.
-
-## Inheritance Rules
-
-| Execution type | Models | Thinking | Other execution settings |
+| Execution type | Models | Thinking | Notes |
 | --- | --- | --- | --- |
-| Chat run | agent override or `defaults.models` | agent override or `defaults.thinking` | agent override or defaults |
-| `spawn_agent()` without `agent=` | current agent | current agent | current agent |
-| `spawn_agent(agent="other")` | target agent | target agent | target agent |
-| Job run | `job.model` or resolved agent models | resolved agent thinking | resolved agent settings, except `job.max_iterations` may override |
+| chat run | agent override or `defaults.models` | agent override or `defaults.thinking` | normal agent inheritance |
+| `spawn_agent()` without `agent=` | current agent | current agent | fresh run, same agent |
+| `spawn_agent(agent="other")` | target agent | target agent | uses target agent config |
+| job run | `job.model` or resolved agent models | resolved agent thinking | `job.max_iterations` may override |
 
 Jobs may override:
 
@@ -87,12 +87,12 @@ Jobs do not override:
 Behavior:
 
 - if you set it explicitly, Operator uses your value
-- if it is `null`, Operator asks LiteLLM for the model's max output size
+- if it is `null`, Operator asks LiteLLM for the model max output size when available
 - if LiteLLM cannot resolve a max, Operator omits the parameter
 
 ## `context_ratio`
 
-`context_ratio` controls how much of the model window Operator is willing to spend on live request context before each model call.
+`context_ratio` controls how much of the model input budget Operator is willing to spend on live request context.
 
 That budget includes:
 
@@ -108,12 +108,35 @@ When the request is too large, Operator preserves:
 
 Then it trims older conversation history first.
 
+## Time-Aware Message History
+
+User messages, job prompts, and sub-agent task messages carry their creation time into model input.
+
+They are rendered like:
+
+```text
+[Thursday, 2026-03-12T09:22:40-07:00]
+```
+
+If the user has a stored timezone, Operator renders timestamps in that timezone. Otherwise it falls back to UTC.
+
+This keeps the prompt time-aware without mutating the stable system prompt.
+
 ## Cross-Provider History Safety
 
-When provider-specific reasoning metadata appears in assistant history, Operator strips that provider-specific content before the next call.
+When provider-specific reasoning metadata appears in assistant history, Operator strips it before the next call.
 
-Why it matters:
+Why this matters:
 
-- Anthropic-to-OpenAI or OpenAI-to-other-provider fallback should not break because one provider stored incompatible reasoning blocks in history
+- fallback from one provider to another does not carry incompatible reasoning blocks forward
+- longer conversations stay portable across providers
 
-This is one of the pieces that makes cross-provider fallback workable in longer runs.
+## Practical Defaults
+
+For a first install:
+
+- use one strong default model
+- leave `thinking: off` until you have a specific need
+- keep `max_iterations: 25`
+- leave `max_output_tokens: null`
+- change `context_ratio` only if you understand the tradeoff between history and tool/schema overhead

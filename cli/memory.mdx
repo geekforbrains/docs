@@ -1,6 +1,6 @@
 ---
 title: "Memory CLI"
-description: "Inspect file-backed memories and rebuild the search index"
+description: "Inspect file-backed memory and rebuild the search index"
 ---
 
 The memory CLI works on the file-backed memory system under `~/.operator/`.
@@ -56,9 +56,15 @@ operator memory search "release schedule"
 operator memory search "slack app" --scope agent:operator
 ```
 
-Searches note memories through the SQLite FTS5 index.
+Searches note memory through the SQLite index.
 
-If you have configured `defaults.embeddings` and installed `sqlite-vec`, the same index can also use vector embeddings. The CLI surface stays the same either way.
+If you have configured `defaults.embeddings` and installed `sqlite-vec`, the same index can also use vector search. The CLI surface stays the same either way.
+
+If search returns nothing on a fresh install, build the index first:
+
+```sh
+operator memory index
+```
 
 ## `index`
 
@@ -75,16 +81,3 @@ Behavior:
 - `--force` rebuilds the full index from scratch
 
 Run this after manual edits to memory files.
-
-## Typical Workflow
-
-```sh
-operator memory list agent:operator
-operator memory search "deploy checklist" --scope agent:operator
-operator memory index
-```
-
-## Related Docs
-
-- [Memory](/concepts/memory)
-- [Configuration](/configuration)

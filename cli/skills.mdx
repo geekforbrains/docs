@@ -12,7 +12,7 @@ operator skills
 operator skills list
 ```
 
-The CLI does **not** create, edit, or reset skills. Use the filesystem or the runtime tools `create_skill`, `update_skill`, `delete_skill`, and `list_skills` for that.
+The CLI does not create, edit, or reset skills. Use the filesystem or the runtime tools `create_skill`, `update_skill`, `delete_skill`, and `list_skills` for that.
 
 ## `skills` / `skills list`
 
@@ -44,10 +44,5 @@ operator logs -n 50
 If a skill is missing from the list:
 
 - confirm `~/.operator/skills/<name>/SKILL.md` exists
-- confirm the frontmatter `name` matches the directory
-- check logs for validation warnings
-
-## Related Docs
-
-- [Skills](/concepts/skills)
-- [Built-in Tools](/concepts/tools)
+- confirm the frontmatter is valid
+- check logs for parsing warnings

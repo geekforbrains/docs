@@ -18,7 +18,7 @@ starts the long-running runtime.
 That runtime expects:
 
 - a valid `~/.operator/operator.yaml`
-- at least one configured transport in `agents:`
+- at least one configured transport somewhere under `agents:`
 
 Everything else in the CLI is for setup, inspection, and maintenance.
 
@@ -38,10 +38,10 @@ Everything else in the CLI is for setup, inspection, and maintenance.
 | Group | Purpose |
 | --- | --- |
 | `operator user ...` | users, identities, and roles |
-| `operator service ...` | launchd or systemd service management |
+| `operator service ...` | `launchd` or `systemd --user` service management |
 | `operator job ...` | inspect, enable, disable, and manually run jobs |
 | `operator skills ...` | list discoverable skills and env status |
-| `operator memory ...` | inspect memories and rebuild the search index |
+| `operator memory ...` | inspect memory and rebuild the search index |
 
 Useful defaults:
 
