@@ -237,6 +237,7 @@ agents:
     max_iterations: 25
     context_ratio: 0.5
     max_output_tokens: null
+    sandbox: true
     permissions:
       tools: "*"
       skills: "*"
@@ -253,6 +254,18 @@ agents:
 ```
 
 Per-agent overrides are optional. If a field is omitted, Operator falls back to `defaults`.
+
+### Sandbox
+
+```yaml
+agents:
+  operator:
+    sandbox: true   # default
+```
+
+When `sandbox` is `true` (the default), file tools (`read_file`, `write_file`, `list_files`) are restricted to the agent's workspace directory. Paths that resolve outside the workspace are rejected.
+
+Set `sandbox: false` to allow file tools to read and write anywhere on the filesystem. Only do this for trusted agents that need access to files outside their workspace.
 
 ### Permissions
 

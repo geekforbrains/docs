@@ -5,97 +5,75 @@ description: "Local multi-agent runtime for Slack with markdown prompts, file-ba
 
 <img src="/images/operator_banner.png" alt="Operator" />
 
-# Local agents, normal files, real work.
+# Local agents. Normal files. Real work.
 
-Operator runs named agents from `~/.operator/`, connects them to Slack, and keeps the important parts of the system in files you can inspect and edit.
+Operator is a multi-agent runtime that lives in `~/.operator/`. Connect agents to Slack, give them tools, schedule jobs, teach them skills — all with plain files you can read, edit, and version control.
 
-The codebase is opinionated on purpose:
-
-- `AGENT.md` is the agent charter.
-- `JOB.md` is the scheduled task definition.
-- `SKILL.md` is reusable know-how.
-- memory lives in markdown files under `rules/` and `notes/`.
-- SQLite stores conversation history, identities, and indexes, but not the human-facing source of truth.
-
-Slack is the only runtime transport in the current code.
+No dashboards. No black boxes. Just markdown and YAML.
 
 ## Start Here
 
 <CardGroup cols={2}>
   <Card title="Quickstart" icon="rocket" href="/quickstart">
-    Install Operator, scaffold `~/.operator/`, add Slack and model secrets, create the first admin, and send the first message.
+    Go from `pip install` to a working Slack agent in under 10 minutes.
   </Card>
   <Card title="Slack Setup" icon="message" href="/transports/slack">
-    Configure the Slack app, required scopes and events, thread-scoped sessions, and Slack-specific tools.
+    Create the Slack app, configure scopes, events, and thread-scoped sessions.
   </Card>
   <Card title="Configuration" icon="gear" href="/configuration">
-    Learn the real `operator.yaml` schema, defaults, permission groups, roles, and transport config.
+    The full `operator.yaml` reference — models, permissions, roles, and transports.
   </Card>
   <Card title="Agents" icon="user-gear" href="/concepts/agents">
-    Split work across specialist agents with separate prompts, permissions, memory, state, and workspaces.
+    Split work across specialist agents with their own prompts, tools, memory, and workspaces.
   </Card>
 </CardGroup>
 
-## What Lives On Disk
+## Everything is a file
 
 ```text
 ~/.operator/
-├── operator.yaml
-├── .env
-├── SYSTEM.md
+├── operator.yaml           # config
+├── .env                    # secrets
+├── SYSTEM.md               # global prompt
 ├── agents/
 │   └── <agent>/
-│       ├── AGENT.md
-│       ├── workspace/
-│       ├── memory/
-│       └── state/
+│       ├── AGENT.md        # agent charter
+│       ├── workspace/      # working files
+│       ├── memory/         # what it knows
+│       └── state/          # machine bookkeeping
 ├── jobs/
-│   └── <job>/
-│       └── JOB.md
+│   └── <job>/JOB.md        # scheduled work
 ├── skills/
-│   └── <skill>/
-│       └── SKILL.md
+│   └── <skill>/SKILL.md    # reusable know-how
 ├── memory/
-│   ├── global/
-│   └── users/
-├── shared/
-├── db/
+│   ├── global/             # shared knowledge
+│   └── users/              # per-user knowledge
+├── shared/                 # cross-agent exchange
+├── db/                     # SQLite (history, index)
 └── logs/
 ```
 
-Why this matters:
+Prompts live in git. Memory is readable markdown. Jobs and skills are plain files, not hidden state. If something goes wrong, you can open a file and see exactly why.
 
-- prompts are versionable
-- rules and notes stay readable
-- jobs and skills are plain files, not hidden dashboard state
-- work artifacts live in the workspace instead of disappearing into model history
+## Pick the right primitive
 
-## Choose The Right Primitive
-
-| Use this | When you want |
+| Primitive | Reach for it when you want… |
 | --- | --- |
-| `AGENT.md` | a different role, mission, or standing behavior |
-| `permissions` | a tighter or broader execution boundary |
-| memory `rules/` | short instructions that should shape every future run |
-| memory `notes/` | durable knowledge that should be searched on demand |
-| state | machine bookkeeping like cursors, queues, and checkpoints |
-| skills | reusable instructions, references, scripts, and assets |
-| jobs | recurring work on a cron schedule |
+| `AGENT.md` | a distinct role, mission, or personality |
+| `permissions` | to widen or narrow what an agent can do |
+| `rules/` | standing instructions injected into every run |
+| `notes/` | durable knowledge searched on demand |
+| `state/` | machine bookkeeping — cursors, queues, checkpoints |
+| `skills/` | reusable instructions, scripts, and references |
+| `jobs/` | recurring work on a cron schedule |
 
-## Why The File-First Model Works
+## Suggested reading order
 
-- It is reviewable. You can diff prompt, job, and skill changes in git.
-- It is debuggable. If a rule exists, you can open the file that created it.
-- It is recoverable. The important state is still understandable without a web UI.
-- It keeps memory honest. Durable knowledge stays visible and scoped.
+1. [Quickstart](/quickstart) — get it running
+2. [Slack](/transports/slack) — understand the transport
+3. [Configuration](/configuration) — learn the knobs
+4. [Agents](/concepts/agents) — split into specialists
+5. [Jobs](/concepts/jobs) — automate recurring work
+6. [Tools](/concepts/tools) — see what's built in
 
-## Read In This Order
-
-1. [Quickstart](/quickstart)
-2. [Slack](/transports/slack)
-3. [Configuration](/configuration)
-4. [Agents](/concepts/agents)
-5. [Jobs](/concepts/jobs)
-6. [Built-in Tools](/concepts/tools)
-
-Once that loop is working, use the deeper pages for customization, permissions, memory, skills, and execution details.
+After that, explore [memory](/concepts/memory), [skills](/concepts/skills), [models](/concepts/models), and [users](/concepts/users) as you need them.
